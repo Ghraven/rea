@@ -1,3 +1,4 @@
+import { CFB_INVENTORY_LIMITATION } from "./cfbFormat.js";
 import { z } from "zod";
 
 import {
@@ -389,6 +390,19 @@ const allUnexploredBranches = (
       ),
     ),
   );
+  if (
+    inventory.occurrences.some(
+      ({ artifact_format }) => artifact_format === "cfb",
+    )
+  )
+    branches.push(
+      branch(
+        "format-specific-analysis-required",
+        CFB_INVENTORY_LIMITATION,
+        null,
+        evidenceId,
+      ),
+    );
   if (inventory.manifest.root_format === "unknown")
     branches.push(
       branch(

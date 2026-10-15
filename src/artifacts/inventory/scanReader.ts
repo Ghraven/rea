@@ -1,3 +1,4 @@
+import { CFB_INVENTORY_LIMITATION } from "../../domain/cfbFormat.js";
 import { isAbsolute } from "node:path";
 
 import {
@@ -221,6 +222,8 @@ const visitArtifactEntries = async (
         occurrence.artifact_id = digested.node.artifact_id;
         occurrence.artifact_kind = digested.classification.kind;
         occurrence.artifact_format = digested.classification.format;
+        if (occurrence.artifact_format === "cfb")
+          occurrence.limitations.push(CFB_INVENTORY_LIMITATION);
         occurrence.hash_status = digested.mismatched
           ? "mismatched"
           : "verified";

@@ -1,3 +1,7 @@
+import {
+  hasCfbSignature,
+  CFB_INVENTORY_LIMITATION,
+} from "../../domain/cfbFormat.js";
 import { compareUnicodeCodePoints } from "../../domain/unicodeCodePointOrder.js";
 import { isJavaScriptSourcePath } from "../../domain/javascript/javascriptArtifactFiles.js";
 import { digestCanonicalValue } from "../../domain/canonicalDigest.js";
@@ -243,7 +247,7 @@ export const rootOccurrenceFor = (
   artifact_kind:
     metadata.format === "directory" ||
     isZipPackageFormat(metadata.format) ||
-    ["asar", "dmg", "pkg"].includes(metadata.format)
+    ["asar", "dmg", "pkg", "cfb"].includes(metadata.format)
       ? "container"
       : artifactRoleForFormat(metadata.path, metadata.format).kind,
   artifact_format: metadata.format,
@@ -253,7 +257,7 @@ export const rootOccurrenceFor = (
   encrypted: false,
   hash_status: "verified",
   source_location: null,
-  limitations: [],
+  limitations: metadata.format === "cfb" ? [CFB_INVENTORY_LIMITATION] : [],
 });
 
 export const rekeyOccurrences = (
@@ -524,6 +528,7 @@ const artifactRoleForFormat = (
       kind: "container",
       format: zipPackageFormatForPath(path) ?? format,
     };
+  if (format === "cfb") return { kind: "container", format };
   if (format === "plist") return { kind: "plist", format };
   return {
     kind: ["native-addon", "dynamic-library"].includes(byPath.kind)
@@ -538,6 +543,7 @@ export const classifyArtifactBytes = (
   prefix: Buffer,
   fileSize = prefix.length,
 ): ArtifactNode["format"] => {
+  if (hasCfbSignature(prefix)) return "cfb";
   if (hasZipSignature(prefix)) return "zip";
   if (hasBinaryPlistSignature(prefix)) return "plist";
   if (hasXmlPlistSignature(prefix)) return "plist";

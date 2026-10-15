@@ -1,3 +1,4 @@
+import { CFB_INVENTORY_LIMITATION } from "../../domain/cfbFormat.js";
 import { AsarArtifactReader } from "../AsarArtifactReader.js";
 import type {
   ArtifactReader,
@@ -60,6 +61,11 @@ export const inventoryCoverage = (
           : []),
         ...traversal.limitations,
       ],
+    };
+  if (format === "cfb")
+    return {
+      coverage: { scope: "container-entries", status: "unknown" },
+      limitations: [CFB_INVENTORY_LIMITATION],
     };
   // dmg and pkg reach here only after classifyRootFormat matched their bytes.
   if (format === "dmg" || format === "pkg")

@@ -1,3 +1,4 @@
+import { hasCfbSignature } from "../domain/cfbFormat.js";
 import { constants, type Stats } from "node:fs";
 import { createHash } from "node:crypto";
 import {
@@ -311,6 +312,7 @@ const detectArtifactFormat = async (
       "WebAssembly v1 artifacts are not supported by the native opening route",
       { constraint: "wasm_requires_static_inspection" },
     );
+  if (hasCfbSignature(magic.subarray(0, observed.bytesRead))) return "cfb";
   if (hasZipSignature(magic.subarray(0, observed.bytesRead))) {
     // The HarmonyOS App Pack suffix `.app` is a root-input concept; a nested
     // ZIP member ending in `.app` keeps the generic zip classification.
@@ -396,7 +398,7 @@ const isArchiveFormat = (
     | "raw-binary"
   >,
 ): format is Extract<BinaryTarget, { kind: "archive" }>["format"] =>
-  isZipPackageFormat(format) || ["asar", "dmg", "pkg"].includes(format);
+  isZipPackageFormat(format) || ["asar", "dmg", "pkg", "cfb"].includes(format);
 
 const sha256Handle = async (
   handle: FileHandle,

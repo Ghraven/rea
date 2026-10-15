@@ -40,6 +40,7 @@ const artifactFormatSchema = z.enum([
   "dmg",
   "zip",
   "pkg",
+  "cfb",
   "asar",
   "javascript-bundle",
   "source-map",
@@ -69,6 +70,7 @@ const artifactFormatSchema = z.enum([
 /** Formats established from bytes or a virtual directory tree, independent of path roles. */
 const artifactContentFormatSchema = artifactFormatSchema.extract([
   "zip",
+  "cfb",
   "mach-o-universal",
   "mach-o",
   "elf",
