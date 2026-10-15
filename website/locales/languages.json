@@ -49,6 +49,12 @@
     "dir": "ltr"
   },
   {
+    "code": "hi",
+    "name": "हिन्दी",
+    "readme": "docs/readme/README_hi.md",
+    "dir": "ltr"
+  },
+  {
     "code": "de",
     "name": "Deutsch",
     "readme": "docs/readme/README_de.md",
