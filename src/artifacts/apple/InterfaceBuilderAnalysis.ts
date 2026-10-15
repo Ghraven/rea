@@ -608,7 +608,10 @@ const projectNibArchive = (
     const nextSeen = new Set(seen).add(objectId);
     const children: NibHierarchyNode[] = [];
     for (const [key, value] of Object.entries(object.values)) {
-      if (!/(?:subviews|contentview|childviewcontrollers|view)$/iu.test(key))
+      if (
+        key === "NSSuperview" ||
+        !/(?:subviews|contentview|childviewcontrollers|view)$/iu.test(key)
+      )
         continue;
       const direct = reference(value);
       if (direct === null) continue;
@@ -651,6 +654,7 @@ const projectNibArchive = (
     viewHierarchy.hierarchy ?? [],
     () => budget.tryReserve(96),
     maxHierarchyNodes,
+    viewHierarchy.conflictedIds,
   );
   return {
     omitted: viewHierarchy.omitted + hierarchyOmitted + merged.omitted,

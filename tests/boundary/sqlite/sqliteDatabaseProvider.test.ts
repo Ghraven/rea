@@ -66,17 +66,16 @@ it.each(["completed reply", "malformed reply"] as const)(
         reply_path: string;
         input: Parameters<typeof inspectSqliteDatabaseSnapshot>[1];
       };
-      const inspection =
+      const completed =
         replyKind === "completed reply"
           ? inspectSqliteDatabaseSnapshot(request.snapshot_path, request.input)
           : undefined;
-      await writeFile(
-        request.reply_path,
-        inspection === undefined
-          ? "{ malformed reply"
-          : JSON.stringify({ ok: true, inspection }),
-        { flag: "wx", mode: 0o600 },
-      );
+      let reply = "{ malformed reply";
+      if (completed !== undefined) {
+        const { row_selection, ...inspection } = completed;
+        reply = JSON.stringify({ ok: true, inspection, row_selection });
+      }
+      await writeFile(request.reply_path, reply, { flag: "wx", mode: 0o600 });
       const launched = await spawnOwnedProviderProcess({
         ...spawn,
         arguments: ["-e", "process.exit(0)"],

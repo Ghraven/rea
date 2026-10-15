@@ -4,6 +4,7 @@ import { AnalysisCapabilityUnavailableError } from "../../domain/analysisErrorCo
 import { err } from "../../domain/result.js";
 import { ok } from "../../domain/result.js";
 import { createAnalysisExecution } from "../AnalysisProvider.js";
+import { sqliteDatabaseSchema } from "../../domain/sqlite/sqliteDatabase.js";
 
 const fixture = () => ({
   artifact: { path: "/selected.db", sha256: "a".repeat(64), bytes: 4096 },
@@ -145,3 +146,66 @@ it("preserves completed observed evidence when cancellation arrives after provid
     value: { normalized_result: value },
   });
 });
+
+it.each([
+  { kind: "table", columns: undefined, retained: true, valid: true },
+  { kind: "table", columns: ["id", "id"], retained: true, valid: true },
+  { kind: "table", columns: undefined, retained: false, valid: false },
+  { kind: "table", columns: ["missing"], retained: true, valid: false },
+  { kind: "virtual", columns: ["id"], retained: true, valid: false },
+  { kind: "shadow", columns: ["id"], retained: true, valid: false },
+  { kind: "unknown", columns: ["id"], retained: true, valid: false },
+])(
+  "validates inventory samples against retained ordinary-table facts: %j",
+  async ({ kind, columns, retained, valid }) => {
+    const value = sqliteDatabaseSchema.parse({
+      ...fixture(),
+      schema: {
+        ...fixture().schema,
+        tables: [
+          {
+            name: "records",
+            kind,
+            root_page: 2,
+            without_rowid: false,
+            strict: false,
+            column_count: 1,
+            columns_completeness: "not_requested",
+            columns: [],
+          },
+        ],
+      },
+      rows: {
+        table: "records",
+        columns: columns ?? ["id"],
+        values: [],
+        row_limit: 20,
+        returned_rows: 0,
+        truncated: false,
+        order: "unspecified",
+      },
+    });
+    const service = new SqliteDatabaseService({
+      inspect: () =>
+        Promise.resolve(
+          ok({
+            ...execution(value),
+            ...(retained
+              ? { rowSelection: { table: "records", visible_columns: ["id"] } }
+              : {}),
+          }),
+        ),
+    });
+    const result = await service.inspect({
+      path: "/selected.db",
+      table: "records",
+      schema_scope: "inventory",
+      ...(columns === undefined ? {} : { columns }),
+    });
+    expect(result).toMatchObject(
+      valid
+        ? { ok: true, value: { normalized_result: value } }
+        : { ok: false, error: { _tag: "AnalysisOutputError" } },
+    );
+  },
+);

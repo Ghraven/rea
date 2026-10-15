@@ -13,16 +13,16 @@ import {
 } from "../domain/analysisErrorCore.js";
 import {
   sqliteDatabaseSchema,
+  sqliteRowSelectionSchema,
   type InspectSqliteDatabaseInput,
 } from "../domain/sqlite/sqliteDatabase.js";
 import { readStableArtifact } from "../artifacts/readStableArtifact.js";
 import { ArtifactReaderFailure } from "../artifacts/ArtifactReader.js";
 import type { ArtifactResourceScope } from "../artifacts/ArtifactResourceScope.js";
-import { runOwnedCommand } from "../process/OwnedCommand.js";
-import type {
-  ProviderProcessSupervisor,
-  ProviderProcessStopResult,
-} from "../process/ProviderProcess.js";
+import {
+  runOwnedCommand,
+  type OwnedCommandCleanupRetainer,
+} from "../process/OwnedCommand.js";
 import { capturedSqliteOutput } from "./SqliteDatabaseFailures.js";
 import { SQLITE_DATABASE_LIMITS } from "./SqliteDatabaseLimits.js";
 
@@ -34,7 +34,11 @@ const {
 } = sqliteDatabaseSchema.shape;
 const inspectionSchema = z.strictObject(inspectionShape);
 const replySchema = z.discriminatedUnion("ok", [
-  z.strictObject({ ok: z.literal(true), inspection: inspectionSchema }),
+  z.strictObject({
+    ok: z.literal(true),
+    inspection: inspectionSchema,
+    row_selection: sqliteRowSelectionSchema.nullable(),
+  }),
   z.strictObject({
     ok: z.literal(false),
     reason: z.enum([
@@ -113,11 +117,8 @@ export const executeSqliteDatabaseWorker = async (request: {
   readonly launcher?: SqliteWorkerLauncher;
   readonly signal?: AbortSignal;
   readonly captured: (output: AnalysisCapturedOutput) => void;
-  readonly retainCleanup?: (
-    owner: ProviderProcessSupervisor,
-    result: Extract<ProviderProcessStopResult, { status: "incomplete" }>,
-  ) => void;
-}): Promise<z.output<typeof inspectionSchema>> => {
+  readonly retainCleanup: OwnedCommandCleanupRetainer;
+}): Promise<Extract<z.output<typeof replySchema>, { ok: true }>> => {
   const requestPath = join(request.root, "request.json");
   const replyPath = join(request.root, "reply.json");
   await writeFile(
@@ -151,9 +152,7 @@ export const executeSqliteDatabaseWorker = async (request: {
     {
       ...(request.signal === undefined ? {} : { signal: request.signal }),
       ...(request.launcher === undefined ? {} : { launcher: request.launcher }),
-      ...(request.retainCleanup === undefined
-        ? {}
-        : { retainCleanup: request.retainCleanup }),
+      retainCleanup: request.retainCleanup,
     },
   );
   const capturedOutput = capturedSqliteOutput(execution);
@@ -185,5 +184,5 @@ export const executeSqliteDatabaseWorker = async (request: {
     );
   }
   if (!reply.ok) throw rejectedReply(reply, capturedOutput);
-  return reply.inspection;
+  return reply;
 };

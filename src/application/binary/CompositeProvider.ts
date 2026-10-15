@@ -13,6 +13,7 @@ import type {
   ProviderIdentity,
 } from "../AnalysisProvider.js";
 import { closeAnalysisClient } from "./AnalysisClientCleanup.js";
+import { projectAnalysisError } from "../../domain/analysisErrorProjection.js";
 import { compareUnicodeCodePoints } from "../../domain/unicodeCodePointOrder.js";
 
 /** Synthetic identity for a deterministic provider set. */
@@ -60,6 +61,7 @@ const closeCompositeClients =
             "Multiple composed provider clients could not be confirmed closed.",
           failures: failures.map(({ providerId, error }) => ({
             provider_id: providerId,
+            error: projectAnalysisError(error),
             message: error.message,
             resources: [...error.cleanupResources],
             ...(error.diagnostics === undefined

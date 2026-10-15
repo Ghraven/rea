@@ -135,6 +135,72 @@ cliTest.runIf(SQLITE_NATIVE_LIMITS_AVAILABLE)(
   },
 );
 
+cliTest.runIf(SQLITE_NATIVE_LIMITS_AVAILABLE)(
+  "samples all visible columns while retaining compact inventory through CLI and MCP",
+  async ({ cli }) => {
+    const root = await createTestTempDirectory("rea-sqlite-inventory-rows-");
+    const path = join(root, "selected.db");
+    const database = new DatabaseSync(path);
+    try {
+      database.exec(`
+        CREATE TABLE selected(id INTEGER, "" TEXT, generated INTEGER GENERATED ALWAYS AS (id + 1) VIRTUAL);
+        CREATE TABLE unrelated(value TEXT);
+        INSERT INTO selected(id, "") VALUES (7, 'value');
+      `);
+    } finally {
+      database.close();
+    }
+    const before = await readFile(path);
+    const result = await cli.run({
+      arguments: [
+        "inspect-sqlite-database",
+        path,
+        "--table",
+        "selected",
+        "--schema-scope",
+        "inventory",
+        "--json",
+      ],
+      environment: { REA_LOG_LEVEL: "silent" },
+    });
+    expect(result.exitCode, result.stdout + result.stderr).toBe(0);
+    expect(result.json).toMatchObject({
+      normalized_result: {
+        schema: {
+          scope: "inventory",
+          tables: ["selected", "unrelated"].map((name) => ({
+            name,
+            columns: [],
+            columns_completeness: "not_requested",
+          })),
+        },
+        rows: {
+          columns: ["id", "", "generated"],
+          returned_rows: 1,
+          values: [
+            [
+              { type: "integer", value: "7" },
+              { type: "text", value: "value" },
+              { type: "integer", value: "8" },
+            ],
+          ],
+        },
+      },
+    });
+    expect(JSON.stringify(result.json)).not.toContain("CREATE TABLE");
+    expect(JSON.stringify(result.json)).not.toContain("row_selection");
+    const { call } = await connectLocalToolsMcp();
+    const response = await call("inspect_sqlite_database", {
+      path,
+      table: "selected",
+      schema_scope: "inventory",
+    });
+    expect(response.isError).not.toBe(true);
+    expect(response.structuredContent).toEqual(result.json);
+    expect(await readFile(path)).toEqual(before);
+  },
+);
+
 cliTest(
   "discovers SQLite runtime availability before inspecting a database through CLI and MCP",
   async ({ cli }) => {

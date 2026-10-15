@@ -3,8 +3,15 @@ import type {
   ExecutionOptions,
 } from "../AnalysisProvider.js";
 import type { AnalysisError } from "../../domain/analysisErrorBase.js";
-import type { InspectSqliteDatabaseInput } from "../../domain/sqlite/sqliteDatabase.js";
+import type {
+  InspectSqliteDatabaseInput,
+  SqliteRowSelection,
+} from "../../domain/sqlite/sqliteDatabase.js";
 import type { Result } from "../../domain/result.js";
+
+export interface SqliteDatabaseExecution extends AnalysisExecution {
+  readonly rowSelection?: SqliteRowSelection | null;
+}
 
 /** Offline database inspection boundary shared by CLI and MCP. */
 export interface SqliteDatabasePort {
@@ -13,5 +20,5 @@ export interface SqliteDatabasePort {
   inspect(
     input: InspectSqliteDatabaseInput,
     options?: ExecutionOptions,
-  ): Promise<Result<AnalysisExecution, AnalysisError>>;
+  ): Promise<Result<SqliteDatabaseExecution, AnalysisError>>;
 }

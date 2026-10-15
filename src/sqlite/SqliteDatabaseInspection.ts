@@ -4,9 +4,11 @@ import { jsonParts } from "../domain/jsonSerialization.js";
 import {
   SQLITE_ROW_LIMIT_DEFAULT,
   sqliteSchemaScope,
+  sqliteVisibleColumnNames,
   type InspectSqliteDatabaseInput,
   type SqliteDatabase,
   type SqliteValue,
+  type SqliteRowSelection,
 } from "../domain/sqlite/sqliteDatabase.js";
 import {
   SQLITE_DATABASE_LIMITS,
@@ -61,7 +63,7 @@ type DatabaseEncoding = z.output<typeof encodingSchema>;
 type Inspection = Pick<
   SqliteDatabase,
   "engine" | "database_encoding" | "schema" | "rows" | "limitations"
->;
+> & { readonly row_selection: SqliteRowSelection | null };
 type SelectedTableFacts = Pick<
   SqliteDatabase["schema"]["tables"][number],
   "name" | "kind" | "columns"
@@ -423,9 +425,7 @@ const readRows = (
       `Rows from ${table.kind} table ${input.table} are outside the ordinary-table inspection profile.`,
     );
   const limit = input.row_limit ?? SQLITE_ROW_LIMIT_DEFAULT;
-  const visibleColumns = table.columns
-    .filter((column) => column.hidden !== 1)
-    .map((column) => column.name);
+  const visibleColumns = sqliteVisibleColumnNames(table.columns);
   const columns = input.columns ?? visibleColumns;
   const available = new Set(visibleColumns);
   for (const name of columns)
@@ -538,11 +538,20 @@ export const inspectSqliteDatabaseSnapshot = (
       limitations,
       encoding,
     });
+    const rowSelection =
+      selectedTable === undefined
+        ? null
+        : {
+            table: selectedTable.name,
+            visible_columns: sqliteVisibleColumnNames(selectedTable.columns),
+          };
+    budget.retain(rowSelection);
     return {
       engine: { name: "SQLite", version },
       database_encoding: encoding,
       schema,
       rows: readRows(db, input, selectedTable, { encoding, budget }),
+      row_selection: rowSelection,
       limitations,
     };
   } finally {
