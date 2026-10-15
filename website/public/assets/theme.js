@@ -18,7 +18,7 @@
     const theme = choice ?? (system.matches ? "dark" : "light");
     root.dataset.theme = theme;
     document.querySelector('meta[name="theme-color"]').content =
-      theme === "dark" ? "#1e1e2e" : "#ffffff";
+      theme === "dark" ? "#151513" : "#f7f6f2";
     window.dispatchEvent(new Event("website-theme-change"));
   };
 

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>REA — Reverse Engineering for Your Coding Agent</title>
+    <title>REA: Reverse Engineering for Your Coding Agent</title>
     <meta
       name="description"
       content="Reverse engineer apps, binaries and browser behavior with your coding agent. Follow clear guides and try interactive examples with REA."
@@ -60,7 +60,7 @@
     <!-- prettier-ignore -->
     <meta property="og:site_name" content="REA" />
     <!-- prettier-ignore -->
-    <meta property="og:title" content="REA — Reverse Engineering for Your Coding Agent" />
+    <meta property="og:title" content="REA: Reverse Engineering for Your Coding Agent" />
     <!-- prettier-ignore -->
     <meta property="og:description" content="Reverse engineer apps, binaries and browser behavior with your coding agent. Follow clear guides and try interactive examples with REA." />
     <!-- prettier-ignore -->
@@ -76,12 +76,12 @@
     <!-- prettier-ignore -->
     <meta
       property="og:image:alt"
-      content="REA — Find out how software works. Reverse engineering with your coding agent."
+      content="REA: Find out how software works. Reverse engineering with your coding agent."
     />
     <!-- prettier-ignore -->
     <meta name="twitter:card" content="summary_large_image" />
     <!-- prettier-ignore -->
-    <meta name="twitter:title" content="REA — Reverse Engineering for Your Coding Agent" />
+    <meta name="twitter:title" content="REA: Reverse Engineering for Your Coding Agent" />
     <!-- prettier-ignore -->
     <meta name="twitter:description" content="Reverse engineer apps, binaries and browser behavior with your coding agent. Follow clear guides and try interactive examples with REA." />
     <!-- prettier-ignore -->
@@ -89,11 +89,11 @@
     <!-- prettier-ignore -->
     <meta
       name="twitter:image:alt"
-      content="REA — Find out how software works. Reverse engineering with your coding agent."
+      content="REA: Find out how software works. Reverse engineering with your coding agent."
     />
     <!-- website:sharing:end -->
     <!-- website:theme:start -->
-    <meta name="theme-color" content="#ffffff" />
+    <meta name="theme-color" content="#f7f6f2" />
     <!-- Apply the saved theme before styles load, to avoid a flash on navigation. -->
     <script src="./assets/theme.js"></script>
     <!-- website:theme:end -->
@@ -110,7 +110,7 @@
     <header class="site-header">
       <div class="container header-inner">
         <a class="brand" href="./" aria-label="REA home"
-          ><span class="brand-name">REA</span
+          ><span class="brand-name"><svg class="brand-wordmark" viewBox="0 0 104 40" width="104" height="40" aria-hidden="true" focusable="false"><path fill="currentColor" fill-rule="evenodd" d="M0 0H20A12 12 0 0 1 20 24H8V40H0Z M8 8V16H20A4 4 0 0 0 20 8Z" /><path fill="currentColor" d="M19.6 27.5H28.3L34 40H25.3Z" /><path fill="currentColor" d="M40 0H66V8H48V16H63V24H48V32H66V40H40Z" /><path fill="currentColor" fill-rule="evenodd" d="M72 40V14A14 14 0 0 1 86 0H90A14 14 0 0 1 104 14V40H96V30H80V40Z M80 22H96V14A6 6 0 0 0 90 8H86A6 6 0 0 0 80 14Z" /></svg></span
           ><span class="brand-caption" data-i18n-skip>Reverse Engineer Anything</span></a
         >
         <nav class="navigation" aria-label="Main navigation">
@@ -235,12 +235,10 @@
             </div>
             <div class="home-reading-links">
               <p>
-                <a href="showcase/">Showcases →</a> — investigations and
+                <a href="showcase/">Showcases</a>: investigations and
                 interactive demos.
               </p>
-              <p>
-                <a href="blog/">Blog →</a> — methods and reconstruction notes.
-              </p>
+              <p><a href="blog/">Blog</a>: methods and reconstruction notes.</p>
             </div>
           </div>
           <div class="home-setup" id="install">
@@ -320,14 +318,111 @@
 
       <section class="section" id="what-is-re">
         <div class="container">
-          <div class="section-heading">
-            <h2>How it works</h2>
+          <div class="home-how-grid">
+            <div>
+              <div class="section-heading">
+                <h2>How it works</h2>
+              </div>
+              <p class="lede">
+                Reverse engineering means learning how software works by
+                inspecting the program itself. With REA, your agent can follow
+                the code, explain a feature and help you rebuild it.
+              </p>
+            </div>
+            <div class="home-exploded" aria-hidden="true" translate="no">
+              <svg viewBox="0 0 200 400" focusable="false">
+                <path
+                  class="exploded-guide"
+                  d="M10 43V145M190 43V145M10 153V245M190 153V245M10 253V345M190 253V345"
+                />
+                <g class="is-file">
+                  <polygon
+                    class="exploded-side"
+                    points="10,345 100,390 100,398 10,353"
+                  />
+                  <polygon
+                    class="exploded-side"
+                    points="100,390 190,345 190,353 100,398"
+                  />
+                  <polygon
+                    class="exploded-top"
+                    points="100,300 190,345 100,390 10,345"
+                  />
+                  <polygon
+                    class="exploded-inner"
+                    points="100,323 145,345 100,367 55,345"
+                  />
+                </g>
+                <g class="is-code">
+                  <polygon
+                    class="exploded-side"
+                    points="10,245 100,290 100,298 10,253"
+                  />
+                  <polygon
+                    class="exploded-side"
+                    points="100,290 190,245 190,253 100,298"
+                  />
+                  <polygon
+                    class="exploded-top"
+                    points="100,200 190,245 100,290 10,245"
+                  />
+                  <polygon
+                    class="exploded-inner"
+                    points="100,223 145,245 100,267 55,245"
+                  />
+                </g>
+                <g class="is-function">
+                  <polygon
+                    class="exploded-side"
+                    points="10,145 100,190 100,198 10,153"
+                  />
+                  <polygon
+                    class="exploded-side"
+                    points="100,190 190,145 190,153 100,198"
+                  />
+                  <polygon
+                    class="exploded-top"
+                    points="100,100 190,145 100,190 10,145"
+                  />
+                  <polygon
+                    class="exploded-inner"
+                    points="100,123 145,145 100,167 55,145"
+                  />
+                </g>
+                <g class="is-result">
+                  <polygon
+                    class="exploded-side"
+                    points="10,35 100,80 100,88 10,43"
+                  />
+                  <polygon
+                    class="exploded-side"
+                    points="100,80 190,35 190,43 100,88"
+                  />
+                  <polygon
+                    class="exploded-top"
+                    points="100,-10 190,35 100,80 10,35"
+                  />
+                </g>
+              </svg>
+              <ul class="exploded-callouts">
+                <li class="is-result" style="--y: 8.75%">
+                  <code>200 + 10% = 220</code><code>200 × 10% = 20</code>
+                </li>
+                <li style="--y: 36.25%">
+                  <code>fn 0x1801245d0</code
+                  ><code>case 0x76: 0x5b, 0x5c → x / 100</code>
+                </li>
+                <li style="--y: 61.25%">
+                  <code>0x180124949: CMP EAX, 0x5c</code
+                  ><code>0x18012495b: MOV EDX, 0x64</code>
+                </li>
+                <li style="--y: 86.25%">
+                  <code>CalcViewModel.dll</code
+                  ><code>sha256 07a1953b…10df5</code>
+                </li>
+              </ul>
+            </div>
           </div>
-          <p class="lede">
-            Reverse engineering means learning how software works by inspecting
-            the program itself. With REA, your agent can follow the code,
-            explain a feature and help you rebuild it.
-          </p>
           <ol class="home-workflow" id="how-rea-helps">
             <li>
               <h3>Ask about one feature</h3>
@@ -1191,17 +1286,17 @@ SPEED: 6</code></pre>
             <h2>Any questions?</h2>
             <div class="home-help-links">
               <p>
-                <a href="faq/">Read the FAQ</a> — setup and common questions.
+                <a href="faq/">Read the FAQ</a> for setup and common questions.
               </p>
               <p>
-                <a href="https://discord.gg/GkcryMnJDM">Join Discord</a> — get
+                <a href="https://discord.gg/GkcryMnJDM">Join Discord</a> to get
                 help and discuss your investigations.
               </p>
               <p>
                 <a href="https://github.com/morluto/rea/issues/new/choose"
-                  >GitHub issues</a
+                  >Open a GitHub issue</a
                 >
-                — report a bug or request a feature.
+                to report a bug or request a feature.
               </p>
             </div>
           </div>
@@ -1221,6 +1316,7 @@ SPEED: 6</code></pre>
           ><a href="https://x.com/reatools">Follow us on X</a>
         </div>
       </div>
+      <div class="container footer-wordmark"><svg class="footer-wordmark-svg" viewBox="0 0 104 40" width="104" height="40" aria-hidden="true" focusable="false"><path fill="currentColor" fill-rule="evenodd" d="M0 0H20A12 12 0 0 1 20 24H8V40H0Z M8 8V16H20A4 4 0 0 0 20 8Z" /><path fill="currentColor" d="M19.6 27.5H28.3L34 40H25.3Z" /><path fill="currentColor" d="M40 0H66V8H48V16H63V24H48V32H66V40H40Z" /><path fill="currentColor" fill-rule="evenodd" d="M72 40V14A14 14 0 0 1 86 0H90A14 14 0 0 1 104 14V40H96V30H80V40Z M80 22H96V14A6 6 0 0 0 90 8H86A6 6 0 0 0 80 14Z" /></svg></div>
     </footer>
     <p class="sr-only" id="copy-status" role="status" aria-live="polite"></p>
     <a class="back-to-top" href="#top" aria-label="Back to top">

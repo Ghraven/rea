@@ -527,7 +527,7 @@ class WebsiteTranslationChecks(unittest.TestCase):
                         doc = Document(path.read_text())
                         colors = [node for node in doc.nodes if node.tag == "meta" and node.attrs.get("name") == "theme-color"]
                         self.assertEqual(len(colors), 1)
-                        self.assertEqual(colors[0].attrs.get("content"), "#ffffff")
+                        self.assertEqual(colors[0].attrs.get("content"), "#f7f6f2")
                         self.assertNotIn("media", colors[0].attrs)
                         theme = [node for node in doc.nodes if node.tag == "script" and (node.attrs.get("src") or "").endswith("/assets/theme.js")]
                         self.assertEqual(len(theme), 1)
