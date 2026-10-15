@@ -113,5 +113,11 @@
     "name": "Ελληνικά",
     "readme": "docs/readme/README_el.md",
     "dir": "ltr"
-  }
+  },
+  {
+     "code": "hi", 
+     "name": "हिन्दी",
+      "readme": "docs/readme/README_hi.md", 
+      "dir": "ltr" 
+    }
 ]

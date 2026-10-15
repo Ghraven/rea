@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "8KKVz1g/lZ8=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\Dharmendra\\rea\\tests\\fixtures\\nativeaot\\NativeAotFixture.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Dharmendra\\.nuget\\packages\\microsoft.dotnet.ilcompiler\\8.0.22\\microsoft.dotnet.ilcompiler.8.0.22.nupkg.sha512",
+    "C:\\Users\\Dharmendra\\.nuget\\packages\\microsoft.net.illink.tasks\\8.0.22\\microsoft.net.illink.tasks.8.0.22.nupkg.sha512",
+    "C:\\Users\\Dharmendra\\.nuget\\packages\\runtime.win-x64.microsoft.dotnet.ilcompiler\\8.0.22\\runtime.win-x64.microsoft.dotnet.ilcompiler.8.0.22.nupkg.sha512",
+    "C:\\Users\\Dharmendra\\.nuget\\packages\\microsoft.netcore.app.host.win-x64\\8.0.22\\microsoft.netcore.app.host.win-x64.8.0.22.nupkg.sha512"
+  ],
+  "logs": []
+}
