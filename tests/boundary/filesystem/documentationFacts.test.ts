@@ -25,6 +25,8 @@ const README_FACT_FIXTURE_PATHS = [
 ] as const;
 
 const README_LINK_DRIFT_MUTATIONS = [
+  ["(../native-investigation.md)", "(../native-investigation.md?other=1)"],
+  ["(../native-investigation.md)", "(../missing-native.md)"],
   [
     "(../installation.md#supported-agents)",
     "(../installation.md#missing-agents)",
