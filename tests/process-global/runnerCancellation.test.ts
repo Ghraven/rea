@@ -11,6 +11,9 @@ import { createTestTempDirectory } from "../fixtures/temporaryDirectory.js";
 const runnerPath = fileURLToPath(
   new URL("../../scripts/run-exclusive.mjs", import.meta.url),
 );
+const supervisorPath = fileURLToPath(
+  new URL("../../scripts/run-exclusive-command.mjs", import.meta.url),
+);
 
 it.runIf(process.platform !== "win32")(
   "holds ownership until an uncooperative command has finished cancellation",
@@ -312,3 +315,109 @@ function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
     }),
   ]).finally(() => clearTimeout(timeout));
 }
+
+/** True while a PID can still be signalled; a terminated PID reports ESRCH. */
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Launch the supervisor directly over an IPC channel so a test can forward a
+ * shutdown signal or drop the channel, then observe the owned command.
+ */
+function launchSupervisor(directory: string) {
+  const pidPath = join(directory, "command.pid");
+  const gated = `
+    const fs = require("node:fs");
+    fs.writeFileSync(${JSON.stringify(pidPath)}, String(process.pid));
+    process.stdout.write("ready");
+    setInterval(() => {}, 1000);
+  `;
+  const supervisor = spawn(
+    process.execPath,
+    [supervisorPath, "test", process.execPath, "-e", gated],
+    { cwd: directory, stdio: ["ignore", "pipe", "pipe", "ipc"] },
+  );
+  let stderr = "";
+  let notifyReady: (() => void) | undefined;
+  const ready = withTimeout(
+    new Promise<void>((resolveReady) => {
+      notifyReady = resolveReady;
+    }),
+    "supervisor command did not start",
+  );
+  void ready.catch(() => undefined);
+  supervisor.stdout.on("data", (chunk) => {
+    if (chunk.toString().includes("ready")) notifyReady?.();
+  });
+  supervisor.stderr.on("data", (chunk) => (stderr += chunk.toString()));
+  const closed = withTimeout(
+    new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+      (resolveClosed, reject) => {
+        // After the parent drops the IPC channel, Node emits `exit` but not
+        // `close`, so resolve on whichever fires first.
+        let settled = false;
+        const finish = (code: number | null, signal: NodeJS.Signals | null) => {
+          if (settled) return;
+          settled = true;
+          resolveClosed({ code, signal });
+        };
+        supervisor.once("error", reject);
+        supervisor.once("exit", finish);
+        supervisor.once("close", finish);
+      },
+    ),
+    "supervisor did not finish",
+  );
+  const commandPid = async () =>
+    Number(await readFile(pidPath, "utf8").catch(() => "0"));
+  const stop = async () => {
+    const pid = await commandPid();
+    if (pid > 0) stopIfPresent(pid);
+    if (supervisor.exitCode === null && supervisor.signalCode === null)
+      supervisor.kill("SIGKILL");
+    await closed.catch(() => undefined);
+  };
+  return { supervisor, ready, closed, commandPid, stop, stderr: () => stderr };
+}
+
+it.runIf(process.platform === "win32")(
+  "terminates its owned command when cancellation is forwarded over IPC",
+  async () => {
+    const directory = await createTestTempDirectory("rea-runner-win-ipc-");
+    const runner = launchSupervisor(directory);
+    try {
+      await runner.ready;
+      const pid = await runner.commandPid();
+      expect(isAlive(pid)).toBe(true);
+      runner.supervisor.send("SIGTERM");
+      expect(await runner.closed).toMatchObject({ code: 143, signal: null });
+      expect(isAlive(pid)).toBe(false);
+    } finally {
+      await runner.stop();
+    }
+  },
+);
+
+it.runIf(process.platform === "win32")(
+  "terminates its owned command when the parent disconnects",
+  async () => {
+    const directory = await createTestTempDirectory("rea-runner-win-drop-");
+    const runner = launchSupervisor(directory);
+    try {
+      await runner.ready;
+      const pid = await runner.commandPid();
+      expect(isAlive(pid)).toBe(true);
+      runner.supervisor.disconnect();
+      expect(await runner.closed).toMatchObject({ code: 143, signal: null });
+      expect(isAlive(pid)).toBe(false);
+    } finally {
+      await runner.stop();
+    }
+  },
+);

@@ -99,7 +99,15 @@ function handleDisconnect() {
 function handleSignal(signal) {
   if (shutdownSignal !== undefined) return;
   shutdownSignal = signal;
-  if (child === undefined || process.platform === "win32") return;
+  if (child === undefined) return;
+  if (process.platform === "win32") {
+    // Windows has no process groups or POSIX signals. Terminate the directly
+    // owned command through its ChildProcess handle; a bare PID is not a
+    // verified owner. The transaction is released only after the observed
+    // close event, which runCommand awaits.
+    child.kill(signal);
+    return;
+  }
   // Establish cancellation before signalling the group. This supervisor is
   // its live leader, so the group identifier cannot be reused during cleanup.
   process.kill(-process.pid, signal);
