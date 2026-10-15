@@ -103,6 +103,13 @@ explicit path or endpoint and do not need it.
 - .NET NativeAOT PE/ELF: native Ghidra analysis. Native code can yield pseudocode;
   consult the NativeAOT workflow in `references/native-and-artifacts.md` for
   optional metadata recovery and its supported host/layout boundary.
+- Cryptographic, signing, or encoding algorithm behind an observed output
+  (ciphertext, header, token, MAC, or signature), from an execution trace,
+  native analysis, or passive runtime observation: read
+  [cryptographic algorithm recovery](references/cryptographic-algorithm-recovery.md)
+  for the evidence-first identification and reconstruction workflow. It is
+  identification and evidence only; it recognizes and reports protections
+  (packing, obfuscation, VM, white-box) without defeating them.
 - User-owned browser page already open: `list_browser_targets`.
 - Browser action the agent must perform (click, type, navigate):
   `capture_browser_scenario` with declared actions. See

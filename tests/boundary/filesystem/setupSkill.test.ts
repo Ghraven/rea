@@ -605,6 +605,7 @@ describe("canonical skill transaction", () => {
       "SKILL.md",
       "references/android-applications.md",
       "references/connection-and-recovery.md",
+      "references/cryptographic-algorithm-recovery.md",
       "references/evidence-workflows.md",
       "references/javascript-applications.md",
       "references/native-and-artifacts.md",

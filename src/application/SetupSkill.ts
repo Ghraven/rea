@@ -27,6 +27,7 @@ export const MANAGED_SKILL_FILES = [
   "references/android-applications.md",
   "references/runtime-observation.md",
   "references/evidence-workflows.md",
+  "references/cryptographic-algorithm-recovery.md",
 ] as const;
 
 export const isManagedSkillManifest = (content: string): boolean =>
