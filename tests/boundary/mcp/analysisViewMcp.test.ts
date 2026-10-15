@@ -37,11 +37,13 @@ import {
   analysisViewCaptureFixture,
   analysisViewCaptureEvidence,
   analysisViewObjectDenseCapture,
+  analysisViewNativeEvidence,
 } from "../../fixtures/analysisView.js";
 import { createTestBinarySession } from "../../fixtures/binarySession.js";
 import { BINARY_LAYOUT_TEST_PROVIDER } from "../../fixtures/binaryDiagnostics/layout.js";
 import { wasmArtifactFixture } from "../../fixtures/wasm/artifact.js";
 import { evmInterfaceFixture } from "../../fixtures/evm/interface.js";
+import type { RelationshipCoverage } from "../../../src/domain/relationshipCoverage.js";
 
 const connect = async (
   binaryLayout?: BinaryLayoutService,
@@ -69,6 +71,75 @@ const connect = async (
   await client.connect(clientTransport);
   return { client, session };
 };
+
+it("preserves native relationship states and diagnostics through inline and retained MCP views", async () => {
+  const { client, session } = await connect();
+  const { ajv, outputSchema } = await advertisedMcpToolSchemas(
+    client,
+    "inspect_analysis_view",
+  );
+  const coverages: (RelationshipCoverage | undefined)[] = [
+    {
+      status: "partial",
+      limited_directions: ["callers"],
+      limitations: ["Callers: fixture read limit"],
+      diagnostics: ["Fixture relationship diagnostic"],
+    },
+    { status: "partial", limitations: ["Historical undirected read limit"] },
+    {
+      status: "unknown",
+      limited_directions: ["callees"],
+      reason: "Callees not measured",
+      diagnostics: ["Unknown coverage diagnostic"],
+    },
+    {
+      status: "complete",
+      diagnostics: ["Only direct references are observed"],
+    },
+    { status: "complete" },
+    undefined,
+  ];
+  for (const coverage of coverages) {
+    const parent = analysisViewNativeEvidence(coverage);
+    const before = JSON.stringify(parent);
+    expect(session.recordEvidence(parent).ok).toBe(true);
+    for (const facet of ["callers", "callees"] as const) {
+      const outputs = [];
+      for (const source of [
+        { kind: "inline", evidence: parent },
+        { kind: "retained-evidence", evidence_id: parent.evidence_id },
+      ]) {
+        const response = await client.callTool({
+          name: "inspect_analysis_view",
+          arguments: {
+            source,
+            view: { kind: "native", facet, offset: 0, limit: 1 },
+          },
+        });
+        expect(response.isError).not.toBe(true);
+        expect(
+          ajv.validate(outputSchema, response.structuredContent),
+          JSON.stringify(ajv.errors),
+        ).toBe(true);
+        const evidence = parseEvidence(response.structuredContent);
+        expect(evidence.relationship_coverage).toEqual(
+          parent.relationship_coverage,
+        );
+        expect(evidence.normalized_result).toMatchObject({
+          item: [],
+          coverage: { total: 0, exhausted: true },
+          limitations: expect.arrayContaining(["Fixture dossier caveat"]),
+        });
+        for (const diagnostic of coverage?.diagnostics ?? [])
+          expect(evidence.limitations).not.toContain(diagnostic);
+        expect(session.evidenceById(evidence.evidence_id)).toEqual(evidence);
+        outputs.push(evidence);
+      }
+      expect(outputs[0]).toEqual(outputs[1]);
+    }
+    expect(JSON.stringify(parent)).toBe(before);
+  }
+});
 
 it("advertises typed module references and preserves portable/retained Evidence parity", async () => {
   const { client, session } = await connect();

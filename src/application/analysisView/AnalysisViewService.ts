@@ -224,6 +224,10 @@ const createAnalysisViewEvidence = (
         : "derived",
     authority: parent.authority,
     limitations: result.limitations,
+    // Provider-observed relationship completeness is independent of view paging.
+    ...(result.kind === "native" && parent.relationship_coverage !== null
+      ? { relationshipCoverage: parent.relationship_coverage }
+      : {}),
     locations: [
       ...(result.artifact.path.length > 0
         ? [{ kind: "artifact-path" as const, path: result.artifact.path }]
