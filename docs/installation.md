@@ -815,6 +815,22 @@ rea doctor --json
 rea setup
 ```
 
+Official Ghidra releases ship native decompilers only for Linux x64 and
+Windows. On macOS, install Xcode Command Line Tools first, then build them once
+with the JDK selected above and Gradle 8.5+ or the bundled wrapper. See
+[Missing macOS native decompiler](#missing-macos-native-decompiler) for a
+manual `make` alternative on macOS x64:
+
+```bash
+cd "$GHIDRA_INSTALL_DIR/support/gradle"
+gradle buildNatives # or ./gradlew buildNatives
+```
+
+The build writes `Ghidra/Features/Decompiler/build/os/mac_arm_64/decompile`
+(or `mac_x86_64`), which `rea doctor` reports as `ghidra-native_decompiler`.
+If Homebrew Gradle installs a newer JDK, keep `JAVA_HOME` on a JDK that the
+Ghidra installation accepts.
+
 On Windows, configure the existing installation in PowerShell:
 
 ```powershell
