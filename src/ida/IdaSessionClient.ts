@@ -251,7 +251,7 @@ export class IdaSessionClient implements AnalysisClient {
       );
     if (
       operation === "procedure_callers" &&
-      idaProtocol(this.config) !== "legacy"
+      idaProtocol(this.config) === "native"
     )
       return err(
         new AnalysisCapabilityUnavailableError(
