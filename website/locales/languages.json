@@ -113,5 +113,11 @@
     "name": "Ελληνικά",
     "readme": "docs/readme/README_el.md",
     "dir": "ltr"
+  },
+  {
+    "code": "bn",
+    "name": "বাংলা",
+    "readme": "docs/readme/README_bn.md",
+    "dir": "ltr"
   }
 ]
