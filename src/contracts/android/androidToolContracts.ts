@@ -98,4 +98,24 @@ export const ANDROID_TOOL_CONTRACTS = [
       },
     ],
   },
+  {
+    name: "trace_android_resource_references",
+    ...toolContractMetadata("trace_android_resource_references"),
+    description:
+      "Map UI resource ids (as capture_adb_ui_state reports resource-id, e.g. com.example:id/login or android:id/title) to their integer IDs, R-class field declarations, and every DEX instruction that loads them: const literals (findViewById), switch cases (onClick dispatch on getId), and R-field reads. Sites name the class, top_class, and method to open with inspect_android_method; totals stay exact when max_sites_per_resource bounds the list. Static only; the APK is never executed.",
+    kind: "android-provider",
+    inputSchema: androidInputSchemas.trace_android_resource_references,
+    outputSchema: evidenceResultOf(
+      androidResultSchemas.trace_android_resource_references,
+    ),
+    examples: [
+      {
+        title: "Find the code behind a captured button",
+        input: {
+          path: "/tmp/Example.apk",
+          resource_ids: ["com.example.app:id/login"],
+        },
+      },
+    ],
+  },
 ] as const satisfies readonly ToolContract[];
