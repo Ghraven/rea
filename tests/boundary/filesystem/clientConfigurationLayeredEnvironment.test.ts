@@ -68,7 +68,7 @@ it("validates language/compiler settings in the effective OpenCode environment",
     { REA_GHIDRA_COMPILER_SPEC_ID: compiler },
   );
   expect(await inspectClientConfiguration(fixture.client, {}, command)).toEqual(
-    { status: "already_current" },
+    { status: "already_current", dialect: "opencode" },
   );
   expect(await clientConfigurationAligned(fixture.client, {}, command)).toBe(
     true,
@@ -170,7 +170,7 @@ it("uses inherited settings when creating a missing write layer", async () => {
   const overrides = { REA_GHIDRA_COMPILER_SPEC_ID: compiler };
   expect(
     await inspectClientConfiguration(fixture.client, overrides, command),
-  ).toEqual({ status: "create" });
+  ).toEqual({ status: "create", dialect: "opencode" });
   expect(
     await configureClientConfiguration(fixture.client, overrides, command),
   ).toMatchObject({ status: "configured" });
@@ -198,6 +198,7 @@ it("replaces the selected write layer rather than the last loaded layer", async 
   const overrides = { REA_LOG_LEVEL: "debug" };
   expect(await inspectClientConfiguration(client, {}, command)).toEqual({
     status: "already_current",
+    dialect: "opencode",
   });
   expect(
     await configureClientConfiguration(client, overrides, command),

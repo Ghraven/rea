@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { MCP_STARTUP_POLICY } from "../mcpStartupPolicy.js";
 import { runSetup } from "./Setup.js";
 import type { SetupProgressEvent } from "./SetupTypes.js";
 import { FakeSetupHost, options } from "./Setup.fixture.js";
@@ -331,6 +332,13 @@ describe("setup plan application", () => {
     expect(result.plannedActions.map(({ id }) => id)).toEqual([
       "configure_client:codex",
     ]);
+    const detail = result.plannedActions[0]?.detail ?? "";
+    // Codex keeps a positive caller-selected startup timeout.
+    expect(detail).not.toContain("startup_timeout_sec with");
+    expect(detail).toContain(
+      "registration fields that do not parse are removed",
+    );
+    expect(detail).toContain("A tools value is removed.");
     expect(host.hopperInstalls).toBe(0);
     expect(host.configurations).toBe(0);
   });
@@ -380,6 +388,119 @@ describe("setup plan application", () => {
     expect(result.status).toBe("ready");
     expect(result.appliedActions).toEqual([]);
     expect(host.hopperInstalls).toBe(0);
+  });
+});
+
+describe("setup approval disclosure", () => {
+  it("keeps Grok Build's entry disabled flag in the approval plan", async () => {
+    const host = new FakeSetupHost();
+    host.hopper = "/Applications/Hopper";
+    host.skill = "unchanged";
+    host.clients = [
+      {
+        name: "grok_build",
+        displayName: "Grok Build",
+        configPath: "/grok.toml",
+        format: "grok",
+      },
+    ];
+
+    const result = await runSetup(
+      { ...options(false), dryRun: true, clientIds: ["grok_build"] },
+      host,
+    );
+
+    expect(result.plannedActions[0]?.detail).toContain(
+      `startup_timeout_sec with ${JSON.stringify(MCP_STARTUP_POLICY.codexStartupTimeoutSeconds)}`,
+    );
+    expect(result.plannedActions[0]?.detail).toContain(
+      "A boolean disabled value is kept.",
+    );
+  });
+
+  it("discloses that Copilot tool selection is replaced", async () => {
+    const host = new FakeSetupHost();
+    host.hopper = "/Applications/Hopper";
+    host.skill = "unchanged";
+    host.clients = [
+      {
+        name: "copilot_cli",
+        displayName: "GitHub Copilot CLI",
+        configPath: "/copilot.json",
+        format: "copilot_cli",
+      },
+    ];
+
+    const result = await runSetup(
+      { ...options(false), dryRun: true, clientIds: ["copilot_cli"] },
+      host,
+    );
+
+    expect(result.plannedActions[0]?.detail).toContain(
+      `tools with ${JSON.stringify(["*"])}`,
+    );
+  });
+
+  it("discloses that a legacy OpenCode entry keeps only its environment", async () => {
+    const host = new FakeSetupHost();
+    host.hopper = "/Applications/Hopper";
+    host.skill = "unchanged";
+    host.clients = [
+      {
+        name: "opencode",
+        displayName: "OpenCode",
+        configPath: "/opencode.json",
+        format: "opencode",
+      },
+    ];
+    host.clientInspections.set("opencode", {
+      status: "update",
+      dialect: "opencode_v2",
+    });
+
+    const result = await runSetup(
+      { ...options(false), dryRun: true, clientIds: ["opencode"] },
+      host,
+    );
+
+    const detail = result.plannedActions[0]?.detail ?? "";
+    expect(detail).toContain(
+      "A legacy OpenCode entry moved into the native server table keeps only its environment.",
+    );
+    expect(detail).not.toContain(`enabled with ${JSON.stringify(true)}`);
+  });
+
+  it("describes Cordis fields the Harness writer replaces", async () => {
+    const host = new FakeSetupHost();
+    host.hopper = "/Applications/Hopper";
+    host.skill = "unchanged";
+    host.clients = [
+      {
+        name: "dsh",
+        displayName: "DeepSeek Harness",
+        configPath: "/cordis.patch.yml",
+        format: "dsh",
+      },
+    ];
+
+    const result = await runSetup(
+      { ...options(false), dryRun: true, clientIds: ["dsh"] },
+      host,
+    );
+    const detail = result.plannedActions[0]?.detail ?? "";
+    const [executable = "rea", ...args] = host.registrationCommand;
+
+    expect(detail).toContain(
+      "Other fields on the retained Cordis server row are kept.",
+    );
+    expect(detail).toContain(
+      'The row-level disabled flag is removed to activate the registration and name is set to "@deepseek-ai/dsh-mcp-client".',
+    );
+    expect(detail).toContain(`serverName with ${JSON.stringify("rea")}`);
+    expect(detail).toContain(`transport with ${JSON.stringify("stdio")}`);
+    expect(detail).toContain(`command with ${JSON.stringify(executable)}`);
+    expect(detail).toContain(`args with ${JSON.stringify(args)}`);
+    expect(detail).not.toContain("Remote-server keys");
   });
 });
 

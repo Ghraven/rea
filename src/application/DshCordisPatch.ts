@@ -421,6 +421,18 @@ export const serializeDshDocument = (
     throw new ConfigurationError("Missing Cordis edit plan");
   return document.cordis.source.serialize(document.cordis.desired);
 };
+/** Approval-plan text for the launcher keys `DshCordisDocument` replaces. */
+export const describeDshRegistrationRetention = (
+  command: readonly string[],
+): string => {
+  const entry = dshClientRegistrationEntry(command);
+  const replaced = [...LAUNCHER_KEYS]
+    .filter((key) => Object.hasOwn(entry, key))
+    .sort((left, right) => left.localeCompare(right))
+    .map((key) => `${key} with ${JSON.stringify(entry[key])}`);
+  return `Other fields on the retained Cordis server row are kept. Duplicate existing rows with id ${JSON.stringify(DSH_ENTRY_ID)} are collapsed to one canonical row using the last matching row, so fields unique to earlier rows are discarded. The row-level disabled flag is removed to activate the registration and name is set to ${JSON.stringify(DSH_CLIENT_PACKAGE)}. Setup replaces ${replaced.join(", ")}. Environment overrides are merged.`;
+};
+
 export const dshClientRegistrationEntry = (
   command: readonly string[],
   environment: Readonly<Record<string, string>> = {},

@@ -12,6 +12,7 @@ import {
 
 import { readClientRegistrationStatuses } from "../../../src/application/ClientRegistrationStatus.js";
 import { npxRegistrationCommand } from "../../../src/application/ClientRegistrationIdentity.js";
+import { describeDshRegistrationRetention } from "../../../src/application/DshCordisPatch.js";
 import {
   configureClientConfiguration,
   inspectClientConfiguration,
@@ -353,6 +354,13 @@ describe("DeepSeek Harness registration identity", () => {
       ),
     );
     expect(reaRows).toHaveLength(1);
+  });
+
+  it("discloses duplicate row removal in the setup plan detail", () => {
+    const detail = describeDshRegistrationRetention(command);
+    expect(detail).toContain('Duplicate existing rows with id "rea-mcp"');
+    expect(detail).toContain("using the last matching row");
+    expect(detail).toContain("fields unique to earlier rows are discarded");
   });
 
   it("reports a foreign server name as stale instead of aligned", async () => {

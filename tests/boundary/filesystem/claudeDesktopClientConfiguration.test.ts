@@ -157,7 +157,7 @@ describe("Windows Claude Desktop configuration location", () => {
     expect(client.msixPackage?.processView).toBe("direct");
     await expect(
       inspectClientConfiguration(client, {}, command),
-    ).resolves.toEqual({ status: "create" });
+    ).resolves.toEqual({ status: "create", dialect: "json" });
     await expect(
       configureClientConfiguration(client, {}, command),
     ).resolves.toEqual({ status: "configured" });
@@ -226,6 +226,7 @@ describe("MSIX Claude Desktop registration lifecycle", () => {
       inspectClientConfiguration(client, {}, command),
     ).resolves.toEqual({
       status: "update",
+      dialect: "json",
       backupPath: `${privateConfig}.rea.backup`,
     });
     await expect(
@@ -278,7 +279,7 @@ describe("MSIX Claude Desktop registration lifecycle", () => {
     await configureClientConfiguration(resolved, {}, command);
     await expect(
       inspectClientConfiguration(client, {}, command),
-    ).resolves.toEqual({ status: "already_current" });
+    ).resolves.toEqual({ status: "already_current", dialect: "json" });
   });
 
   it("refuses a write once the package reads a newer private copy", async () => {

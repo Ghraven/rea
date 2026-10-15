@@ -12,6 +12,11 @@ import { isAbsolute, resolve } from "node:path";
 import { z } from "zod";
 import { valid } from "semver";
 
+import {
+  type ParsedClientRegistration,
+  registrationSchema,
+  registrationSchemaFor,
+} from "./ClientRegistrationShape.js";
 import { PRODUCT_IDENTITY } from "../identity.js";
 import { CURRENT_ENTRYPOINT_PATH } from "../process/CurrentEntrypointPath.js";
 import {
@@ -77,23 +82,6 @@ export type UnhealthyClientRegistrationStatus = Exclude<
   ClientRegistrationStatus,
   { readonly state: "aligned" }
 >;
-
-const registrationSchema = z
-  .object({
-    command: z.string().min(1),
-    args: z.array(z.string()).default([]),
-    startup_timeout_sec: z.number().positive().optional(),
-    tool_timeout_sec: z.number().positive().optional(),
-    startupTimeoutMs: z.number().positive().optional(),
-    toolTimeoutMs: z.number().positive().optional(),
-    type: z.string().optional(),
-    transport: z.string().optional(),
-    serverName: z.string().optional(),
-    tools: z.array(z.string()).optional(),
-    disabled: z.boolean().optional(),
-    enabled: z.boolean().optional(),
-  })
-  .passthrough();
 
 interface ClientRegistrationReadOptions {
   readonly platform?: NodeJS.Platform;
@@ -316,7 +304,7 @@ export const readClientRegistrationInspections = async (
 };
 
 const registrationActivation = (
-  registration: z.output<typeof registrationSchema>,
+  registration: ParsedClientRegistration,
   client: SetupClient,
   parsed: ClientConfigurationDocument,
 ): "enabled" | "disabled" =>
@@ -336,7 +324,7 @@ const registrationAligned = ({
   platform,
   kimiInputSchemaProfileSelected,
 }: {
-  readonly registration: z.output<typeof registrationSchema>;
+  readonly registration: ParsedClientRegistration;
   readonly client: SetupClient;
   readonly currentCommandPath: string | undefined;
   readonly platform: NodeJS.Platform;
@@ -429,7 +417,7 @@ const registrationAligned = ({
 const parseRegistration = (
   value: unknown,
   client: SetupClient,
-): z.output<typeof registrationSchema> => {
+): ParsedClientRegistration => {
   if (client.format === "dsh")
     return registrationSchema
       .pick({ command: true, args: true, serverName: true, transport: true })
@@ -451,7 +439,9 @@ const parseRegistration = (
       args,
     });
   }
-  const registration = registrationSchema.parse(value);
+  const registration = registrationSchemaFor(client.format ?? "json").parse(
+    value,
+  );
   if (
     client.format === "kimi" &&
     registration.transport !== undefined &&
@@ -520,7 +510,7 @@ const configuredStatus = (
 
 const timeoutAdvisory = (
   client: SetupClient,
-  registration: z.output<typeof registrationSchema>,
+  registration: ParsedClientRegistration,
   timeoutInputs: McpToolTimeoutInputs,
 ): string | undefined => {
   const toolTimeout =

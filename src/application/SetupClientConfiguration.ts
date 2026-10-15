@@ -8,6 +8,7 @@ import {
 import { err, ok, type Result } from "../domain/result.js";
 import { ConfigurationError } from "../domain/configurationErrors.js";
 import {
+  applyRegistrationStartupTimeout,
   clientRegistrationEntry,
   clientConfigurationValuesEqual,
   clientServerListedDisabled,
@@ -16,9 +17,11 @@ import {
   OMP_DISABLED_SERVERS_KEY,
   parseClientConfiguration,
   parseZcodeFallbackConfiguration,
+  retainClientRegistrationFields,
   serializeClientConfiguration,
   withClientServers,
   type ClientConfigurationDocument,
+  type ClientRegistrationDialect,
 } from "./ClientConfigurationDocument.js";
 import { dshDocument, DshCordisDocument } from "./DshCordisPatch.js";
 import { mkdir, rm, writeFile } from "node:fs/promises";
@@ -506,7 +509,7 @@ const inspectClientDocument = async (
         throwCleanupFailure(fallback.error);
         return { status: "invalid", remediation: fallback.error.detail };
       }
-      return { status: "create" };
+      return { status: "create", dialect: clientRegistrationDialect(client) };
     }
     return {
       status: "invalid",
@@ -545,12 +548,26 @@ const inspectClientDocument = async (
       resolveProviderRequestBudget,
     );
     if (registrationCurrent(parsed, desired))
-      return { status: "already_current" };
+      return { status: "already_current", dialect: parsed.dialect };
     const fallback = await readZcodeFallbackServers(client, parsed);
     if (!fallback.ok) {
       throwCleanupFailure(fallback.error);
       return { status: "invalid", remediation: fallback.error.detail };
     }
+    const backupSelection = await selectCurrentRecoveryBackup(
+      `${client.configPath}.rea.backup`,
+      original,
+    );
+    if (!backupSelection.ok)
+      return {
+        status: "invalid",
+        remediation: backupSelection.error.detail,
+      };
+    return {
+      status: "update",
+      backupPath: backupSelection.value.backupPath,
+      dialect: parsed.dialect,
+    };
   } catch (cause: unknown) {
     if (cause instanceof RegularFileCleanupFailure) throw cause;
     if (cause instanceof ConfigurationError)
@@ -563,20 +580,14 @@ const inspectClientDocument = async (
         "The existing configuration is malformed. Repair it before setup applies any other changes.",
     };
   }
-  const backupSelection = await selectCurrentRecoveryBackup(
-    `${client.configPath}.rea.backup`,
-    original,
-  );
-  if (!backupSelection.ok)
-    return {
-      status: "invalid",
-      remediation: backupSelection.error.detail,
-    };
-  return {
-    status: "update",
-    backupPath: backupSelection.value.backupPath,
-  };
 };
+
+const clientRegistrationDialect = (
+  client: SetupClient,
+): ClientRegistrationDialect =>
+  client.format === undefined || client.format === "unsupported"
+    ? "json"
+    : client.format;
 
 const isMissing = (cause: unknown): boolean =>
   cause instanceof Error && "code" in cause && cause.code === "ENOENT";
@@ -732,10 +743,9 @@ const clientConfigurationDesired = (
           REA_MCP_INPUT_SCHEMA_PROFILE: "compact",
         }
       : environment.value;
-  const registration = clientRegistrationEntry(
-    format,
-    launcher,
-    registrationEnvironment,
+  const registration = applyRegistrationStartupTimeout(
+    client.name,
+    clientRegistrationEntry(format, launcher, registrationEnvironment),
   );
   const previous = parsed?.servers[PRODUCT_IDENTITY.mcpServerKey];
   if (
@@ -745,19 +755,18 @@ const clientConfigurationDesired = (
     "enabledTools" in previous
   )
     registration.enabledTools = previous.enabledTools;
-  return {
+  // Keep fields the user added to REA's own entry, such as OMP `timeout`. A
+  // legacy OpenCode V1 entry migrating into a V2 table keeps only its
+  // environment, because its other fields belong to the V1 shape. The approval
+  // plan states that exception through describeClientRegistrationRetention.
+  // Codex and Kimi keep a positive caller-selected timeout.
+  return retainClientRegistrationFields(format, previous, {
     ...registration,
-    ...(client.name === "codex" || client.name === "grok_build"
-      ? {
-          startup_timeout_sec:
-            client.name === "codex"
-              ? (positiveTimeout(previous, "startup_timeout_sec") ??
-                MCP_STARTUP_POLICY.codexStartupTimeoutSeconds)
-              : MCP_STARTUP_POLICY.codexStartupTimeoutSeconds,
-        }
-      : {}),
     ...(client.name === "codex"
       ? {
+          startup_timeout_sec:
+            positiveTimeout(previous, "startup_timeout_sec") ??
+            MCP_STARTUP_POLICY.codexStartupTimeoutSeconds,
           tool_timeout_sec:
             positiveTimeout(previous, "tool_timeout_sec") ??
             recommendedMcpToolTimeoutSeconds(validated.value.timeoutInputs),
@@ -773,7 +782,7 @@ const clientConfigurationDesired = (
             recommendedMcpToolTimeoutMs(validated.value.timeoutInputs),
         }
       : {}),
-  };
+  });
 };
 
 const positiveTimeout = (
