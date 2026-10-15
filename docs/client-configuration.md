@@ -269,11 +269,29 @@ Windows, `~/.hermes` elsewhere — including any `HERMES_DATA_DIR_SUFFIX`. Herme
 connects an entry unless `enabled` is false, so setup states `enabled: true`.
 
 Hermes personal skills install under the active Hermes home's `skills` directory.
-Setup, doctor and uninstall follow the root's `active_profile` selection, as
-plain Hermes CLI commands do. An explicit `HERMES_HOME` pointing to
-`profiles/<name>` selects that named profile directly. An invalid, missing or
-deleted sticky profile is reported instead of writing into the default home;
-repair the profile or run `hermes profile use default` before retrying.
+Setup, doctor and uninstall follow the same sticky-profile lookup as plain
+Hermes CLI commands. A custom `HERMES_HOME` outside the platform default home
+reads its own `active_profile`. An existing override directory physically inside
+the default home reads the default home's `active_profile` instead. In both cases,
+a selected name is resolved under the configured `HERMES_HOME`.
+
+For example, with `HERMES_HOME=~/.hermes/sub` and `~/.hermes/active_profile` set
+to `coder`, setup selects `~/.hermes/sub/profiles/coder/config.yaml` and that
+profile's skills directory. It does not read `~/.hermes/sub/active_profile`.
+Without an outer named selection, this override uses `~/.hermes/sub/config.yaml`.
+Use a home outside the platform default tree for an independent sticky selection.
+
+If the platform default home or any existing prefix resolves to a different
+spelling — for example, a symlinked `HOME`/`USERPROFILE`, `LOCALAPPDATA`, or another
+ancestor — create a nested override directory before running setup. For a
+nonexistent nested directory, REA falls back to the lexical spelling and may miss
+that containment, planning the nested root's configuration instead of honoring
+the outer sticky selection.
+
+An explicit `HERMES_HOME` pointing to `profiles/<name>` selects that named
+profile directly, bypassing sticky selection. An invalid, missing or deleted
+sticky profile is reported instead of writing into the default home; repair the
+profile or run `hermes profile use default` before retrying.
 REA follows `HERMES_HOME` whitespace trimming, environment-variable expansion,
 and home expansion before resolving that profile. Setup previews the resolved
 configuration and skill destinations; doctor and uninstall use those same paths.
