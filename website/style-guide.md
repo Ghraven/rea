@@ -266,6 +266,13 @@ hierarchy. The blue accent identifies something useful. Keep these elements
 consistent rather than adding a new treatment for each page. Decorative
 gradients, large shadows and scroll effects do not help explain the examples.
 
+Motion confirms an action rather than decorating the page. Controls change color
+in about 150ms and scale to `--press` while pressed. Menus and opened details
+enter in 150 to 200ms with `--ease-out`. Under reduced motion, keep opacity and
+color changes and remove movement. A card that leads to one page makes its whole
+area the link target through its existing text link; keep that link's wording
+specific.
+
 Agent terminals contain short, copyable prompts. Use the existing continuous
 cursor animation and reduced-motion behavior. Label an example prompt as an
 example; a real recorded result belongs in an evidence block. Copy buttons

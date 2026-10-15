@@ -10,6 +10,8 @@
   --font-code: "SFMono-Regular", Consolas, "Liberation Mono";
   --font-sans: var(--font-latin), sans-serif;
   --font-mono: var(--font-code), monospace;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --press: scale(0.97);
   font-family: var(--font-sans);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -76,6 +78,7 @@ kbd {
 }
 p {
   margin: 0 0 1.2rem;
+  text-wrap: pretty;
 }
 th,
 td {
@@ -85,6 +88,7 @@ h1,
 h2,
 h3 {
   overflow-wrap: break-word;
+  text-wrap: balance;
   line-height: 1.14;
   font-weight: 650;
   letter-spacing: -0.035em;
@@ -1917,13 +1921,42 @@ pre code {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 2.5rem;
   margin-block: 2rem;
+  padding: 0;
+  list-style: none;
+  counter-reset: workflow;
+}
+.home-workflow li {
+  position: relative;
+  padding-top: 3rem;
+  counter-increment: workflow;
 }
 .home-workflow li + li {
   margin-top: 0;
 }
-.home-workflow li::marker {
-  color: var(--muted);
-  font-size: 0.85rem;
+.home-workflow li::before {
+  content: counter(workflow);
+  position: absolute;
+  top: 0;
+  inset-inline-start: 0;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--page);
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.home-workflow li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 1rem;
+  inset-inline: 2.75rem -1.75rem;
+  height: 1px;
+  background: var(--line);
 }
 .home-workflow h3 {
   margin-bottom: 0.6rem;
@@ -2202,12 +2235,38 @@ pre code {
   gap: 1rem;
 }
 .home-case-card {
+  position: relative;
   display: flex;
   min-width: 0;
   flex-direction: column;
   padding: 1.5rem;
   border: 1px solid var(--line);
   border-radius: 5px;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+.home-case-card .text-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.home-case-card .text-link:focus-visible {
+  outline: 0;
+}
+.home-case-card:has(.text-link:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .home-case-card:hover {
+    border-color: var(--accent);
+    background: var(--soft);
+  }
+  .home-case-card:hover .text-link {
+    text-decoration-thickness: 2px;
+  }
 }
 .home-case-card .eyebrow {
   margin-bottom: 0.8rem;
@@ -2459,6 +2518,20 @@ pre code {
   .home-workflow,
   .home-case-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .home-workflow {
+    gap: 1.75rem;
+  }
+  .home-workflow li {
+    padding-top: 0.2rem;
+    padding-inline-start: 3rem;
+  }
+  .home-workflow li:not(:last-child)::after {
+    top: 2.5rem;
+    bottom: -1.25rem;
+    inset-inline: 1rem auto;
+    width: 1px;
+    height: auto;
   }
   .home-start-grid h1 {
     font-size: clamp(2.7rem, 9vw, 4.65rem);
@@ -2719,9 +2792,157 @@ pre code {
   }
 }
 
+/* Interaction feedback: short, interruptible transitions on controls people
+   press often, and gentle entry for menus and opened details. */
+:is(
+  .button,
+  .copy-button,
+  .theme-toggle,
+  .nav-github,
+  .nav-discord,
+  .nav-x,
+  .language-picker summary,
+  .back-to-top,
+  .contributor-card,
+  .step-selector button,
+  .percent-operation button,
+  .percent-controls button,
+  .dino-buttons button
+) {
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    opacity 200ms ease-out,
+    transform 160ms var(--ease-out);
+}
+:is(
+    .button,
+    .copy-button,
+    .theme-toggle,
+    .nav-github,
+    .nav-discord,
+    .nav-x,
+    .language-picker summary,
+    .back-to-top,
+    .step-selector button,
+    .percent-operation button,
+    .percent-controls button,
+    .dino-buttons button
+  ):active:not(:disabled) {
+  transform: var(--press);
+}
+.navigation a,
+.footer-links a,
+.home-nav-links a,
+.contents a,
+.language-picker nav a {
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+.language-picker[open] nav {
+  transform-origin: top right;
+  transition:
+    opacity 150ms ease-out,
+    transform 150ms var(--ease-out);
+}
+html[dir="rtl"] .language-picker[open] nav {
+  transform-origin: top left;
+}
+.home-page-nav[open] .home-nav-links {
+  transition: opacity 150ms ease-out;
+}
+.home-page-nav > summary svg {
+  transition: transform 200ms var(--ease-out);
+}
+@starting-style {
+  .language-picker[open] nav {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  .home-page-nav[open] .home-nav-links {
+    opacity: 0;
+  }
+  .back-to-top {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+:is(.home-evidence-details, .faq-item, .evidence-details) > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  list-style: none;
+}
+:is(.home-evidence-details, .faq-item, .evidence-details)
+  > summary::-webkit-details-marker {
+  display: none;
+}
+:is(.home-evidence-details, .faq-item, .evidence-details) > summary::before {
+  content: "";
+  flex-shrink: 0;
+  width: 0.42em;
+  height: 0.42em;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 200ms var(--ease-out);
+}
+html[dir="rtl"]
+  :is(.home-evidence-details, .faq-item, .evidence-details)
+  > summary::before {
+  transform: rotate(135deg);
+}
+:is(.home-evidence-details, .faq-item, .evidence-details)[open]
+  > summary::before {
+  transform: translateY(-0.15em) rotate(45deg);
+}
+:is(.home-evidence-details, .faq-item, .evidence-details)[open]
+  > :not(summary) {
+  animation: disclosure-in 200ms var(--ease-out);
+}
+@keyframes disclosure-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@keyframes disclosure-fade {
+  from {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .terminal-cursor {
     animation: none;
+  }
+  :is(
+    .button,
+    .copy-button,
+    .theme-toggle,
+    .nav-github,
+    .nav-discord,
+    .nav-x,
+    .language-picker summary,
+    .back-to-top,
+    .step-selector button,
+    .percent-operation button,
+    .percent-controls button,
+    .dino-buttons button
+  ):active {
+    transform: none;
+  }
+  .language-picker[open] nav,
+  .back-to-top,
+  :is(.home-evidence-details, .faq-item, .evidence-details) > summary::before {
+    transition-property: opacity, color, background-color, border-color;
+  }
+  :is(.home-evidence-details, .faq-item, .evidence-details)[open]
+    > :not(summary) {
+    animation-name: disclosure-fade;
   }
 }
 
