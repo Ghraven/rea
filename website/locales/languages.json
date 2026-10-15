@@ -113,5 +113,11 @@
     "name": "Ελληνικά",
     "readme": "docs/readme/README_el.md",
     "dir": "ltr"
+  },
+  {
+    "code": "sq",
+    "name": "Shqip",
+    "readme": "docs/readme/README_sq.md",
+    "dir": "ltr"
   }
 ]
