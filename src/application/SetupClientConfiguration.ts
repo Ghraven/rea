@@ -156,7 +156,13 @@ const configureClientDocument = async (
           ? ""
           : "{}"),
       format,
+      client.claudeProjectDirectory,
     );
+    if (
+      client.claudeProjectDirectory !== undefined &&
+      clientServerListedDisabled(parsed, PRODUCT_IDENTITY.mcpServerKey)
+    )
+      return { status: "failed", reason: "readback" };
     const policy = await readClientPolicyBlock(
       client,
       parsed,
@@ -315,6 +321,7 @@ const persistClientConfiguration = async ({
     const readback = parseClientConfiguration(
       await readRegularFileText(transactionPath),
       format,
+      client.claudeProjectDirectory,
     );
     if (
       !registrationCurrent(readback, desired) ||
@@ -375,7 +382,11 @@ export const clientConfigurationAligned = async (
       return false;
     }
     const original = await readRegularFileText(client.configPath);
-    const parsed = parseClientConfiguration(original, client.format);
+    const parsed = parseClientConfiguration(
+      original,
+      client.format,
+      client.claudeProjectDirectory,
+    );
     const policy = await readClientPolicyBlock(
       client,
       parsed,
@@ -456,6 +467,16 @@ const inspectClientDocument = async (
   const existing = files.value.find(
     ({ sourcePath }) => sourcePath === client.configPath,
   );
+  if (
+    client.claudeProjectDirectory !== undefined &&
+    existing !== undefined &&
+    clientServerListedDisabled(existing, PRODUCT_IDENTITY.mcpServerKey)
+  )
+    return {
+      status: "invalid",
+      remediation:
+        "REA is disabled for this Claude Code project. Re-enable it in /mcp, then rerun setup.",
+    };
   const editabilityError =
     existing?.dialect === "dsh"
       ? dshDocument(existing.document).editabilityError
@@ -514,7 +535,11 @@ const inspectClientDocument = async (
     };
   }
   try {
-    const parsed = parseClientConfiguration(original, client.format);
+    const parsed = parseClientConfiguration(
+      original,
+      client.format,
+      client.claudeProjectDirectory,
+    );
     const policy = await readClientPolicyBlock(
       client,
       parsed,

@@ -7,10 +7,12 @@ import {
   effectiveClientServer,
   parseClientConfiguration,
   type ClientConfigurationDocument,
+  type ClaudeCodeConfigurationSelection,
 } from "./ClientConfigurationDocument.js";
 import type { SetupClient } from "./SupportedClients.js";
 import { clientRegistrationEnvironment } from "./ClientRegistrationEnvironment.js";
 import type { ArtifactResourceScope } from "../artifacts/ArtifactResourceScope.js";
+import { claudeCodeProjectDirectory } from "./ClaudeCodeProjectDirectory.js";
 import type { ConfigurationError } from "../domain/configurationErrors.js";
 
 /** A parsed layer retains its path so rereading the write target replaces only that layer. */
@@ -33,6 +35,9 @@ export interface ClientConfigurationFileError {
   readonly path: string;
   readonly detail: string;
   readonly cleanupFailure?: RegularFileCleanupFailure;
+  readonly registration_scope?: "user" | "local";
+  readonly project_directory?: string;
+  readonly requested_project_directory?: string;
 }
 
 /** Preserve named read failures and distinguish a missing source from an empty file. */
@@ -66,6 +71,8 @@ export const readConfigurationFile = async (
   path: string,
   format: SetupClient["format"],
   resources?: ArtifactResourceScope,
+  claudeProjectDirectory?: string,
+  options: ClaudeCodeConfigurationSelection = {},
 ): Promise<
   Result<ClientConfigurationDocument | undefined, ClientConfigurationFileError>
 > => {
@@ -74,7 +81,14 @@ export const readConfigurationFile = async (
   const content = source.value;
   if (content === undefined) return ok(undefined);
   try {
-    return ok(parseClientConfiguration(content, format));
+    return ok(
+      parseClientConfiguration(
+        content,
+        format,
+        claudeProjectDirectory,
+        options,
+      ),
+    );
   } catch (cause: unknown) {
     return err({
       kind: "malformed",
@@ -88,17 +102,58 @@ export const readConfigurationFile = async (
 export const readClientConfigurationFiles = async (
   client: SetupClient,
   resources?: ArtifactResourceScope,
+  options: {
+    readonly workspaceDirectory?: string;
+    readonly platform?: NodeJS.Platform;
+  } = {},
 ): Promise<
   Result<readonly ClientConfigurationSource[], ClientConfigurationFileError>
 > => {
   const documents: ClientConfigurationSource[] = [];
   for (const path of client.configPaths ?? [client.configPath]) {
+    let projectDirectory = client.claudeProjectDirectory;
+    if (
+      client.name === "claude_code" &&
+      options.workspaceDirectory !== undefined
+    ) {
+      try {
+        projectDirectory = await claudeCodeProjectDirectory(
+          options.workspaceDirectory,
+          resources,
+        );
+      } catch (cause: unknown) {
+        return err({
+          kind:
+            cause instanceof Error && "code" in cause
+              ? "unreadable"
+              : "malformed",
+          path,
+          requested_project_directory: options.workspaceDirectory,
+          detail: `Could not inspect the selected Claude Code project for ${path}: ${cause instanceof Error ? cause.message : String(cause)}. Check project access and Git metadata, then rerun doctor.`,
+          ...(cause instanceof RegularFileCleanupFailure
+            ? { cleanupFailure: cause }
+            : {}),
+        });
+      }
+    }
     const document = await readConfigurationFile(
       path,
       client.format,
       resources,
+      projectDirectory,
+      {
+        mode:
+          client.claudeProjectDirectory === undefined ? "effective" : "local",
+        platform: options.platform ?? process.platform,
+      },
     );
-    if (!document.ok) return document;
+    if (!document.ok)
+      return err({
+        ...document.error,
+        ...(projectDirectory === undefined
+          ? {}
+          : { project_directory: projectDirectory }),
+      });
     if (document.value !== undefined) {
       const environment = clientRegistrationEnvironment(
         document.value,
@@ -106,7 +161,23 @@ export const readClientConfigurationFiles = async (
         "fragment",
       );
       if (!environment.ok)
-        return err(invalidEnvironment(path, environment.error));
+        return err({
+          ...invalidEnvironment(path, environment.error),
+          ...(client.name === "claude_code"
+            ? {
+                registration_scope:
+                  document.value.serversPath[0] === "projects"
+                    ? ("local" as const)
+                    : ("user" as const),
+                ...(document.value.diagnosticProjectDirectory === undefined
+                  ? {}
+                  : {
+                      project_directory:
+                        document.value.diagnosticProjectDirectory,
+                    }),
+              }
+            : {}),
+        });
       documents.push({ ...document.value, sourcePath: path });
     }
   }
@@ -177,6 +248,10 @@ export const effectiveClientConfiguration = (
 export const readEffectiveClientRegistrationConfiguration = async (
   client: SetupClient,
   resources?: ArtifactResourceScope,
+  options: {
+    readonly workspaceDirectory?: string;
+    readonly platform?: NodeJS.Platform;
+  } = {},
 ): Promise<
   Result<
     {
@@ -186,7 +261,11 @@ export const readEffectiveClientRegistrationConfiguration = async (
     ClientConfigurationFileError
   >
 > => {
-  const nativeSources = await readClientConfigurationFiles(client, resources);
+  const nativeSources = await readClientConfigurationFiles(
+    client,
+    resources,
+    options,
+  );
   if (!nativeSources.ok) return nativeSources;
   const nativeDocument = effectiveClientConfiguration(nativeSources.value);
   const fallbackPath =

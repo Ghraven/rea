@@ -85,6 +85,8 @@ export const discoverSetupState = async (input: {
             CURRENT_ENTRYPOINT_PATH,
           );
     const ownedRegistration =
+      (client.claudeProjectDirectory === undefined ||
+        registration?.registration_scope === "local") &&
       (registration?.state === "aligned" || registration?.state === "stale") &&
       commandIdentity === "owned";
     const configured = ownedRegistration;
@@ -323,12 +325,16 @@ const setupPlan = (input: {
       kind: "configure_client",
       label: client.displayName ?? client.name,
       target: client.configPath,
-      detail: clientConfigurationDetail(
-        client,
-        input.command,
-        input.providerEnvironment,
-        input.installHopper,
-      ),
+      detail:
+        (client.claudeProjectDirectory === undefined
+          ? ""
+          : `Private local scope for ${client.claudeProjectDirectory}. Personal skills are retained. `) +
+        clientConfigurationDetail(
+          client,
+          input.command,
+          input.providerEnvironment,
+          input.installHopper,
+        ),
       external: false,
       operation,
       ...(backupPath === undefined ? {} : { backupPath }),
