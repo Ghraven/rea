@@ -66,6 +66,10 @@ Quá trình thiết lập đăng ký REA với tác nhân và cài đặt các h
 
 ## Bắt đầu nhanh
 
+### DeepSeek Harness
+
+Hỗ trợ Desktop gốc chưa được xác minh. Không dùng plugin 0.2.0; bản ứng viên 0.2.1 cần Node độc lập do người dùng cung cấp. [Hướng dẫn tích hợp](../../integrations/deepseek-harness/README.md) mô tả các yêu cầu và phần xác minh còn lại.
+
 ### Thiết lập tác nhân
 
 Sau khi cài Node.js và npm, chạy:

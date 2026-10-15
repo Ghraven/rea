@@ -66,6 +66,10 @@ La configurazione registra REA con il tuo agente e installa le istruzioni di wor
 
 ## Avvio rapido
 
+### DeepSeek Harness
+
+Il supporto Desktop nativo non è ancora convalidato. Non usare il plugin 0.2.0; il candidato 0.2.1 richiede un’installazione Node autonoma fornita dall’utente. La [guida all’integrazione](../../integrations/deepseek-harness/README.md) descrive i prerequisiti e le verifiche ancora necessarie.
+
 ### Configura il tuo agente
 
 Con Node.js e npm installati, esegui:

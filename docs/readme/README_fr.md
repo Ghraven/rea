@@ -66,6 +66,10 @@ Setup enregistre REA auprès de votre agent et installe les instructions de work
 
 ## Démarrage rapide
 
+### DeepSeek Harness
+
+La prise en charge native de Desktop reste à valider. N’utilisez pas le plugin 0.2.0 ; le candidat 0.2.1 nécessite une installation Node autonome fournie par l’utilisateur. Le [guide d’intégration](../../integrations/deepseek-harness/README.md) décrit les prérequis et les vérifications restantes.
+
 ### Configurer votre agent
 
 Une fois Node.js et npm installés, exécutez :

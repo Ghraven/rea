@@ -66,6 +66,10 @@ Die Einrichtung registriert REA bei deinem Agenten und installiert passende Work
 
 ## Schnellstart
 
+### DeepSeek Harness
+
+Die native Desktop-Unterstützung ist noch nicht qualifiziert. Verwenden Sie das Plugin 0.2.0 nicht; der Kandidat 0.2.1 benötigt eine vom Benutzer bereitgestellte eigenständige Node-Installation. Der [Integrationsleitfaden](../../integrations/deepseek-harness/README.md) beschreibt die Voraussetzungen und ausstehenden Prüfungen.
+
 ### Deinen Agenten einrichten
 
 Wenn Node.js und npm installiert sind, führe diesen Befehl aus:

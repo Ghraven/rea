@@ -68,6 +68,10 @@ REA는 에이전트를 분석 도구에 연결해 네이티브 바이너리, Jav
 
 Linux에서 Ghidra, JADX, 펌웨어 도구를 실행하거나 정적 JavaScript/Electron 분석을 하려면, 프로세스 소유권 확인을 위해 REA의 `PATH`에 procps 호환 `ps`가 있어야 합니다. 해결 방법은 `docs/installation.md`의 "Linux owned-process prerequisite" 항목에 있습니다.
 
+### DeepSeek Harness
+
+네이티브 Desktop 지원은 아직 검증되지 않았습니다. 플러그인 0.2.0을 사용하지 마세요. 후보 버전 0.2.1은 사용자가 제공하는 독립 Node 설치가 필요합니다. [통합 가이드](../../integrations/deepseek-harness/README.md)에서 요구 사항과 남은 검증 항목을 확인하세요.
+
 ### 에이전트 설정
 
 Node.js와 npm이 설치된 환경에서 다음 명령을 실행하세요.

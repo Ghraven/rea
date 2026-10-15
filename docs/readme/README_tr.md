@@ -66,6 +66,10 @@ Kurulum, REA'yı ajanınıza kaydeder ve uyumlu iş akışı talimatlarını yü
 
 ## Hızlı başlangıç
 
+### DeepSeek Harness
+
+Yerel Desktop desteği henüz doğrulanmadı. 0.2.0 eklentisini kullanmayın; 0.2.1 adayı, kullanıcının sağladığı bağımsız bir Node kurulumu gerektirir. [Entegrasyon kılavuzu](../../integrations/deepseek-harness/README.md) gereksinimleri ve kalan doğrulamaları açıklar.
+
 ### Ajanınızı yapılandırın
 
 Node.js ve npm yüklüyken şu komutu çalıştırın:

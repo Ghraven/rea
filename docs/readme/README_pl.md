@@ -66,6 +66,10 @@ Konfigurator rejestruje REA w Twoim agencie i instaluje pasujące instrukcje pra
 
 ## Szybki start
 
+### DeepSeek Harness
+
+Obsługa natywnego Desktop nie została jeszcze zweryfikowana. Nie używaj wtyczki 0.2.0; kandydat 0.2.1 wymaga osobnej instalacji Node dostarczonej przez użytkownika. [Przewodnik integracji](../../integrations/deepseek-harness/README.md) opisuje wymagania i pozostałe kontrole.
+
 ### Skonfiguruj agenta
 
 Po zainstalowaniu Node.js i npm uruchom:

@@ -66,6 +66,10 @@ Proses penyiapan mendaftarkan REA ke agen Anda dan memasang instruksi alur kerja
 
 ## Mulai Cepat
 
+### DeepSeek Harness
+
+Dukungan Desktop native belum divalidasi. Jangan gunakan plugin 0.2.0; kandidat 0.2.1 memerlukan Node mandiri yang disediakan pengguna. Lihat [panduan integrasi](../../integrations/deepseek-harness/README.md) untuk prasyarat dan verifikasi yang masih diperlukan.
+
 ### Siapkan agen Anda
 
 Dengan Node.js dan npm yang telah terpasang, jalankan:

@@ -66,6 +66,10 @@ REA 將 AI 代理連接到分析工具，用於檢查原生二進位檔案、Jav
 
 ## 快速開始
 
+### DeepSeek Harness
+
+原生 Desktop 支援尚未完成驗證。請勿使用 0.2.0 外掛；0.2.1 候選版本需要使用者提供獨立的 Node。[整合指南](../../integrations/deepseek-harness/README.md)說明了前提條件與剩餘驗證工作。
+
 ### 設定 AI 代理
 
 安裝 Node.js 和 npm 後，執行：
