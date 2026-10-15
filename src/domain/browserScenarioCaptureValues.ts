@@ -134,6 +134,24 @@ export type BrowserScenarioEventFamily = z.infer<
   typeof browserScenarioEventFamilySchema
 >;
 
+/**
+ * Families a capture observes. Selecting any network content also enables
+ * network metadata, while captures record only the declared families.
+ */
+export const enabledScenarioEventFamilies = (
+  declared: Iterable<BrowserScenarioEventFamily>,
+  content: {
+    readonly request_body: boolean;
+    readonly response_body: boolean;
+    readonly header_values: boolean;
+  },
+): BrowserScenarioEventFamily[] => {
+  const families = new Set(declared);
+  if (content.request_body || content.response_body || content.header_values)
+    families.add("network");
+  return [...families].sort();
+};
+
 const eventBase = {
   sequence: z.number().int().min(1),
   step_index: z.number().int().min(0),

@@ -13,6 +13,7 @@ import type {
 import type { SanitizedBrowserUrl } from "../domain/browserObservation.js";
 import {
   browserScenarioEventSchema,
+  enabledScenarioEventFamilies,
   type BrowserScenarioEvent,
 } from "../domain/browserScenarioCaptureValues.js";
 import type { BrowserScenarioSecrets } from "./BrowserScenarioSecrets.js";
@@ -107,9 +108,9 @@ export class PlaywrightScenarioEvents {
       response_body: false,
       header_values: false,
     };
-    this.enabled = new Set(options.enabled);
-    if (network.request_body || network.response_body || network.header_values)
-      this.enabled = new Set([...this.enabled, "network"]);
+    this.enabled = new Set(
+      enabledScenarioEventFamilies(options.enabled, network),
+    );
     this.secrets = options.secrets;
     this.limits = options.limits ?? DEFAULT_BROWSER_SCENARIO_CAPTURE_LIMITS;
     this.ownsContext = options.ownsContext === true;

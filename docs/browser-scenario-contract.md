@@ -404,3 +404,43 @@ also unknown.
 Network normalization also commits the removal of capture-local transaction IDs,
 attribution to the requesting step, and unordered transaction comparison. These
 built-in rule identities participate in the normalization digest.
+
+## Step and text views
+
+`inspect_analysis_view` and `inspect-analysis-view` read a completed capture
+without reopening a browser. Use the retained `evidence_id` returned by the MCP
+capture, or pass the complete Evidence JSON printed by the CLI as an inline
+source.
+
+- `{kind: "summary"}` returns the browser identity, step outcomes, per-artifact
+  capture coverage and step changes, declared and enabled event families,
+  events received outside any step window, and the network transaction count.
+- `{kind: "browser-scenario", collection: "steps", offset, limit}` pages steps.
+  Each row carries the exact recorded action declaration and its family
+  (`start-navigation`, `navigation`, `input`, or `wait`), outcome, recorded
+  URLs, counts of the events received inside the step's sequence window, and
+  the count of network transactions attributed to the step by their request.
+  The network count is `null` with `not_requested` coverage when network
+  events were not observed. For each artifact requested at this step or the
+  previous one, a row reports the capture coverage, the comparison digest, and
+  the `change` from the previous step's capture. Every page also names the
+  enabled event families and the events received outside any step window.
+- `{kind: "browser-scenario", collection: "text", step_index, artifact, offset, limit}`
+  pages one step's retained `accessibility` or `dom` text in UTF-16 code units.
+
+Step changes use the digests of the scenario comparison above, without
+normalization rules. They describe differences between consecutive captures,
+not what an action caused: timers, network responses, and capture side effects
+between two captures produce the same result, and `wait` steps dispatch no
+input. Equal digests mean equal recorded values, not equal application state.
+An artifact that a step did not request keeps its comparison `unknown` or
+`not_compared`; set `capture.after_each_step` to every artifact the comparison
+needs. Event receipt does not establish causation, responses can arrive during
+later steps, and events received between windows or after the final capture
+fall in no step's receipt window, although the parent records them with the
+step then current.
+Selecting network content enables network events even when `capture.events`
+omits `network`. Cancelled steps have no post-action capture. The views do not
+inventory available controls; read the accessibility text for the elements a
+step recorded. View Evidence is derived, keeps the capture's authority, and
+links the capture Evidence.
