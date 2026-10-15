@@ -45,6 +45,7 @@ import {
   traverseJavaScriptAstSteps,
 } from "./javascriptSemanticTraversal.js";
 import { semanticRequireOrigin } from "./javascriptSemanticRequireOrigin.js";
+import { semanticRequireShimOrigin } from "./javascriptRequireShimOrigin.js";
 import { semanticBundledRequireOrigin } from "./javascriptBundledRequireOrigin.js";
 import { collectSemanticMemberMutationsSteps } from "./javascriptSemanticMemberMutations.js";
 import { indexJavaScriptAmbientWritesSteps } from "./javascriptSemanticAmbientWrites.js";
@@ -671,7 +672,8 @@ const electronRequireOrigin = (
   state: JavaScriptSemanticAnalysisState,
 ) =>
   semanticRequireOrigin(node, state) ??
-  semanticBundledRequireOrigin(node, state);
+  semanticBundledRequireOrigin(node, state) ??
+  semanticRequireShimOrigin(node, state);
 
 const bindingOrigin = (
   binding: JavaScriptSemanticBindingState,

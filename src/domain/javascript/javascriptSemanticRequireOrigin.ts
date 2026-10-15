@@ -423,6 +423,71 @@ export const semanticMemberChain = (
   return { root: current, members: members.reverse() };
 };
 
+/**
+ * Whether no write to the module `require` delegate happens before `capture`
+ * runs. A saved `require` function still calls the current `module.require`, so
+ * this check belongs at the point the loader is invoked, not only where it was
+ * captured.
+ */
+export const semanticHostRequireModuleWritesIntact = (
+  capture: t.Node,
+  state: JavaScriptSemanticAnalysisState,
+): boolean =>
+  !writesModuleRequire(state).some(
+    (write) =>
+      !semanticTopLevelEffectFollowsCapture(
+        capture,
+        write,
+        state.parentsByNode,
+      ),
+  );
+
+/**
+ * Whether no module or ambient write replaces `require` before `capture` runs.
+ * These checks are mandatory for a bare `require` reference: a replaced loader
+ * is not the host loader regardless of how its binding resolves.
+ */
+export const semanticHostRequireWritesIntact = (
+  capture: t.Node,
+  state: JavaScriptSemanticAnalysisState,
+): boolean =>
+  semanticHostRequireModuleWritesIntact(capture, state) &&
+  !(state.ambientBindingWrites.get("require") ?? []).some(
+    (write) =>
+      !semanticTopLevelEffectFollowsCapture(
+        capture,
+        write,
+        state.parentsByNode,
+      ),
+  );
+
+/**
+ * Whether `reference` reads the intact host `require` at the point `capture`
+ * runs. This is the single owner for the host-loader checks shared by the
+ * direct resolver and by the esbuild shim resolver, which reaches `require`
+ * only through a `typeof require` guard. It applies the mandatory write checks
+ * and the binding check together; a caller that has its own binding exception
+ * must still require {@link semanticHostRequireWritesIntact} separately.
+ */
+export const semanticHostRequireIntact = (
+  reference: t.Identifier,
+  capture: t.Node,
+  state: JavaScriptSemanticAnalysisState,
+): boolean =>
+  semanticHostRequireWritesIntact(capture, state) &&
+  semanticHostRequireBindingIntact(reference, state);
+
+/** Whether the `require` reference is the unmodified CommonJS wrapper loader. */
+const semanticHostRequireBindingIntact = (
+  reference: t.Identifier,
+  state: JavaScriptSemanticAnalysisState,
+): boolean => {
+  const binding = resolveSemanticBindingState(state, reference, "require");
+  if (binding !== undefined)
+    return isUnmodifiedCommonJsWrapperBinding(reference, "require", state);
+  return !semanticResolutionBlocked(state, reference, "require");
+};
+
 /** Recover an unshadowed literal require origin and its exact member path. */
 export const semanticRequireOrigin = (
   node: t.Node | null | undefined,
@@ -436,36 +501,18 @@ export const semanticRequireOrigin = (
     !t.isIdentifier(current.callee, { name: "require" })
   )
     return undefined;
-  if (
-    writesModuleRequire(state).some(
-      (write) =>
-        !semanticTopLevelEffectFollowsCapture(
-          current,
-          write,
-          state.parentsByNode,
-        ),
-    )
-  )
-    return undefined;
   const requireBinding = resolveSemanticBindingState(
     state,
     current.callee,
     "require",
   );
   if (
-    (requireBinding !== undefined &&
-      !isUnmodifiedCommonJsWrapperBinding(current.callee, "require", state) &&
-      !isWrapperRequireInitializerCall(requireBinding, current, state)) ||
-    (requireBinding === undefined &&
-      semanticResolutionBlocked(state, current.callee, "require")) ||
-    (state.ambientBindingWrites.get("require") ?? []).some(
-      (write) =>
-        !semanticTopLevelEffectFollowsCapture(
-          current,
-          write,
-          state.parentsByNode,
-        ),
-    )
+    !semanticHostRequireWritesIntact(current, state) ||
+    (!semanticHostRequireBindingIntact(current.callee, state) &&
+      !(
+        requireBinding !== undefined &&
+        isWrapperRequireInitializerCall(requireBinding, current, state)
+      ))
   )
     return undefined;
   const specifier = stringValue(current.arguments[0]);
