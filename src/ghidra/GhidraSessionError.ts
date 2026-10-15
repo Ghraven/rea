@@ -22,6 +22,7 @@ export type GhidraSessionFailureKind =
   | "process"
   | "protocol"
   | "remote"
+  | "resource"
   | "analysis_timeout";
 
 /** Additional structured context for a Ghidra session failure. */
