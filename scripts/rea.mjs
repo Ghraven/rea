@@ -14,6 +14,9 @@ process.env.REA_PACKAGE_VERSION = packageJson.version;
 const isMcpMode =
   args.length === 1 && (args[0] === "--mcp" || args[0] === "mcp");
 const isMcpDoctorMode = args[0] === "mcp" && args[1] === "doctor";
+// Completion mode needs the command catalog even when its only word is --version.
+const isVersionOnly =
+  args.length === 1 && args[0] === "--version" && !process.env.COMPLETE;
 /** Exit status of a writer terminated by SIGPIPE (128 + 13). */
 const SIGPIPE_EXIT_STATUS = 141;
 // Set once the reader of CLI output has closed the pipe.
@@ -46,6 +49,7 @@ const runtimeFiles = isMcpMode
     ? ["dist/mcp/main.js", "dist/cli-runtime/mcpDoctor.js"]
     : [
         "dist/cli-runtime/cli.js",
+        "dist/cli-runtime/cliBase.js",
         "dist/cli-runtime/cliOutput.js",
         "dist/cli-runtime/cliResultOutput.js",
       ];
@@ -69,8 +73,11 @@ if (!(await compiledRuntimeExists(runtimeFiles))) {
   writeStdout(result.output);
   process.exitCode = result.exitCode;
 } else {
-  const { cliConfigurationError, createCli } =
-    await import("../dist/cli-runtime/cli.js");
+  const { cliConfigurationError, createCliBase } =
+    await import("../dist/cli-runtime/cliBase.js");
+  const createCli = isVersionOnly
+    ? createCliBase
+    : (await import("../dist/cli-runtime/cli.js")).createCli;
   const { createCliResultOutput } =
     await import("../dist/cli-runtime/cliResultOutput.js");
   const {

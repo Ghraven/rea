@@ -49,6 +49,7 @@ export const lazyUrl = import.meta.url;`,
         "dist/generatedPackageMetadata.js":
           'export const generatedPackageMetadata = { version: "1.0.0" };',
         "dist/cli.js": 'export { facts, run } from "./main.js";',
+        "dist/cliBase.js": 'export { facts, run } from "./main.js";',
         "dist/cliOutput.js": 'export { facts } from "./provider/probe λ.js";',
         "dist/cli/cliResultOutput.js":
           'export { facts } from "../provider/probe λ.js";',
@@ -89,9 +90,8 @@ export const run = async () => {
       await bundleRuntime(workspace.root);
       const bundled = await invoke("dist/mcp/main.js");
       expect(bundled).toEqual(original);
-      expect(await invoke("dist/cli-runtime/cli.js")).toEqual(
-        await invoke("dist/cli.js"),
-      );
+      for (const entry of ["cli", "cliBase"])
+        expect(await invoke(`dist/cli-runtime/${entry}.js`)).toEqual(original);
       const cliDirectory = join(workspace.root, "dist/cli-runtime");
       const identity = await processes.run(
         process.execPath,
@@ -136,6 +136,7 @@ export const run = async () => {
       await workspace.write("package.json", '{"type":"module"}');
       for (const path of [
         "dist/cliOutput.js",
+        "dist/cliBase.js",
         "dist/cli/cliResultOutput.js",
         "dist/mcpDoctor.js",
       ])

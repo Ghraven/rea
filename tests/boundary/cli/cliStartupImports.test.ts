@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
+import { PRODUCT_IDENTITY } from "../../../src/identity.js";
 import { createTestTempDirectory } from "../../fixtures/temporaryDirectory.js";
 
 const execute = promisify(execFile);
@@ -160,6 +161,63 @@ const evaluate = (source: string): readonly string[] => [
 ];
 
 describe("CLI startup imports", () => {
+  it("reports the standalone version without loading command registration", async () => {
+    const hook = `data:text/javascript,${encodeURIComponent(`
+      import { registerHooks } from "node:module";
+      registerHooks({
+        resolve(specifier, context, next) {
+          const resolved = next(specifier, context);
+          if (resolved.url.endsWith("/dist/cli-runtime/cli.js"))
+            throw new Error("Version lookup loaded the full command registry");
+          return resolved;
+        },
+      });
+    `)}`;
+    await expect(
+      execute(
+        process.execPath,
+        [`--import=${hook}`, "scripts/rea.mjs", "--version"],
+        {
+          cwd: process.cwd(),
+          env: { ...process.env, COMPLETE: "", REA_LOG_LEVEL: "silent" },
+        },
+      ),
+    ).resolves.toMatchObject({
+      stdout: `${PRODUCT_IDENTITY.packageVersion}\n`,
+      stderr: "",
+    });
+  });
+
+  it("preserves version output and configuration errors across both routes", async () => {
+    for (const args of [["--version"], ["--version", "--json"]]) {
+      const env = { ...process.env, COMPLETE: "", REA_LOG_LEVEL: "silent" };
+      const result = await execute(
+        process.execPath,
+        ["scripts/rea.mjs", ...args],
+        {
+          cwd: process.cwd(),
+          env,
+        },
+      );
+      expect(result).toMatchObject({
+        stdout: `${PRODUCT_IDENTITY.packageVersion}\n`,
+        stderr: "",
+      });
+      await expect(
+        execute(process.execPath, ["scripts/rea.mjs", ...args], {
+          cwd: process.cwd(),
+          env: { ...env, REA_LOG_LEVEL: "invalid-level" },
+        }),
+      ).rejects.toMatchObject({
+        code: 1,
+        stdout: "",
+        stderr: expect.stringContaining(
+          "REA configuration is invalid: REA_LOG_LEVEL:",
+        ),
+      });
+    }
+  });
+
   it("detects each deferred package when its command code loads", async () => {
     const missingBrowser = join(
       await createTestTempDirectory("rea-startup-browser-"),

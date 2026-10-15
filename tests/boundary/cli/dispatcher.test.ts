@@ -16,6 +16,10 @@ describe("executable dispatcher", () => {
       await Promise.all([
         copyFile("scripts/rea.mjs", join(scripts, "rea.mjs")),
         workspace.write(
+          "dist/cli-runtime/cliBase.js",
+          'export const cliConfigurationError = () => undefined; export const createCliBase = () => ({ serve: (args) => process.stdout.write(JSON.stringify({ adapter: "version", args })) });\n',
+        ),
+        workspace.write(
           "package.json",
           JSON.stringify({ type: "module", version: "1.0.0" }),
         ),
@@ -41,11 +45,14 @@ describe("executable dispatcher", () => {
         ),
       ]);
 
-      const invoke = async (args: readonly string[]): Promise<unknown> => {
+      const invoke = async (
+        args: readonly string[],
+        environment?: NodeJS.ProcessEnv,
+      ): Promise<unknown> => {
         const { exitCode, stdout } = await processes.run(
           process.execPath,
           [join(scripts, "rea.mjs"), ...args],
-          { cwd: workspace.root },
+          { cwd: workspace.root, env: { ...process.env, ...environment } },
         );
         expect(exitCode).toBe(0);
         return JSON.parse(stdout) as unknown;
@@ -65,6 +72,17 @@ describe("executable dispatcher", () => {
         adapter: "cli",
         args: ["--mcp", "extra"],
       });
+      await expect(invoke(["--version"])).resolves.toEqual({
+        adapter: "version",
+        args: ["--version"],
+      });
+      await expect(invoke(["--version", "--help"])).resolves.toEqual({
+        adapter: "cli",
+        args: ["--version", "--help"],
+      });
+      await expect(
+        invoke(["--version"], { COMPLETE: "bash" }),
+      ).resolves.toEqual({ adapter: "cli", args: ["--version"] });
     },
   );
 
@@ -80,7 +98,12 @@ describe("executable dispatcher", () => {
         ),
       ]);
 
-      for (const args of [["mcp"], ["mcp", "doctor"], ["--help"]]) {
+      for (const args of [
+        ["mcp"],
+        ["mcp", "doctor"],
+        ["--help"],
+        ["--version"],
+      ]) {
         const result = await processes.run(
           process.execPath,
           [join(scripts, "rea.mjs"), ...args],

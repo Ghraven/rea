@@ -23,6 +23,7 @@ export const bundleRuntime = async (root) => {
       "cli-runtime",
       {
         cli: "cli.js",
+        cliBase: "cliBase.js",
         cliOutput: "cliOutput.js",
         cliResultOutput: "cli/cliResultOutput.js",
         mcpDoctor: "mcpDoctor.js",

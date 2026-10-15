@@ -11,12 +11,8 @@ import { registerAnalysisViewCommands } from "./cli/analysisViewCommands.js";
 import { registerBinaryDiagnosticsCommands } from "./cli/binaryDiagnosticsCommands.js";
 import { registerFridaCommands } from "./cli/fridaCommands.js";
 import type { FridaInstrumentationPort } from "./application/frida/FridaInstrumentationPort.js";
-import { Cli } from "incur";
-
 import { createLogger, parseLogLevel } from "./logger.js";
-import { projectAnalysisError } from "./domain/analysisErrorProjection.js";
-import { PRODUCT_IDENTITY } from "./identity.js";
-import { npxRegistrationCommand } from "./application/ClientRegistrationIdentity.js";
+import { createCliBase } from "./cliBase.js";
 import { registerSetupCommands } from "./cli/setupCommands.js";
 import { registerCoreAnalysisCommands } from "./cli/coreAnalysisCommands.js";
 import { registerUtilityCommands } from "./cli/utilityCommands.js";
@@ -52,15 +48,7 @@ import {
 import { registerReverseEngineeringCommands } from "./cli/reverseEngineeringCommands.js";
 import { registerCutterCommands } from "./cli/cutterCommands.js";
 
-/** Describe CLI settings that are invalid before any command runs, as MCP does. */
-export const cliConfigurationError = (
-  selectedEnvironment: Readonly<Record<string, string | undefined>>,
-): string | undefined => {
-  const value = selectedEnvironment.REA_LOG_LEVEL;
-  if (value === undefined) return undefined;
-  const level = parseLogLevel(value);
-  return level.ok ? undefined : projectAnalysisError(level.error).message;
-};
+export { cliConfigurationError } from "./cliBase.js";
 
 /**
  * Build the one-shot Incur CLI without starting Hopper at import time.
@@ -85,16 +73,7 @@ export const createCli = (
     "cli",
     level?.ok === true ? level.value : "silent",
   );
-  const cli = Cli.create(PRODUCT_IDENTITY.cliBinary, {
-    version: PRODUCT_IDENTITY.packageVersion,
-    description: "Reverse engineer anything from your terminal or agent.",
-    mcp: {
-      command: npxRegistrationCommand().join(" "),
-      instructions:
-        "Ask what software, artifact, protocol, or behavior the user wants to understand, then choose the available investigation capabilities that can produce evidence.",
-    },
-    sync: false,
-  });
+  const cli = createCliBase();
 
   registerSetupCommands(cli, logger, environment);
   registerReverseEngineeringCommands(cli, logger, environment);

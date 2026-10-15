@@ -84,6 +84,12 @@ try {
     ...process.env,
     REA_ANALYSIS_PROVIDER: "auto",
   };
+  const version = await exec(process.execPath, [entry, "--version"], {
+    env: environment,
+    windowsHide: true,
+  });
+  if (version.stdout !== `${packageResult.version}\n` || version.stderr !== "")
+    throw new Error("Packaged Windows CLI reported an unexpected version");
   const help = await exec(process.execPath, [entry, "--help"], {
     env: environment,
     windowsHide: true,
