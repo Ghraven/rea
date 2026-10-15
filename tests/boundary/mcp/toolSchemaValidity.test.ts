@@ -536,9 +536,15 @@ describe("MCP root input schemas", () => {
             flag === undefined ||
             flag === true ||
             (name === "inspect_web_page" && flag === false);
+          // The advertisement presents the boolean literal as a plain
+          // boolean, so it admits both values; the canonical contract keeps
+          // the exact literal.
+          const advertisedAccepted = accepted || flag === false;
           const parsed = contract.inputSchema.safeParse(input);
           expect(parsed.success, `${name}: ${String(flag)}`).toBe(accepted);
-          expect(validate(input), `${name}: ${String(flag)}`).toBe(accepted);
+          expect(validate(input), `${name}: ${String(flag)}`).toBe(
+            advertisedAccepted,
+          );
           if (parsed.success && flag === undefined)
             expect(parsed.data).toMatchObject({
               include_script_sources: name === "analyze_web_bundle",

@@ -9,8 +9,10 @@ import {
   inputSchemaWithinReferenceExpansionBudget,
   presentInputJsonSchema,
 } from "./inputSchemaPresentation.js";
-import { toolContract } from "./toolContracts.js";
+import { presentAdvertisedInputSchema } from "./compactInputSchema.js";
+import { TOOL_CONTRACTS, toolContract } from "./toolContracts.js";
 import {
+  advertisedInputJsonSchema,
   toolInputSchemaWithMetadata,
   transformAdvertisedInputJsonSchema,
 } from "./toolSchemaMetadata.js";
@@ -104,6 +106,288 @@ describe("advertised object dependencies", () => {
       );
     },
   );
+});
+
+const nonStringLiteralPaths = (
+  node: unknown,
+  path: string,
+  found: string[],
+): string[] => {
+  if (Array.isArray(node)) {
+    node.forEach((child, index) =>
+      nonStringLiteralPaths(child, `${path}[${index}]`, found),
+    );
+    return found;
+  }
+  if (typeof node !== "object" || node === null) return found;
+  for (const [key, value] of Object.entries(node)) {
+    const childPath = `${path}.${key}`;
+    if (key === "const" && typeof value !== "string")
+      found.push(`${childPath} = ${JSON.stringify(value)}`);
+    else if (
+      key === "enum" &&
+      Array.isArray(value) &&
+      value.some((member) => typeof member !== "string")
+    )
+      found.push(`${childPath} = ${JSON.stringify(value)}`);
+    else if (!["examples", "default"].includes(key))
+      nonStringLiteralPaths(value, childPath, found);
+  }
+  return found;
+};
+
+describe("advertised literal values", () => {
+  // The same budget the compact profile registers (COMPACT_INPUT_SCHEMA_BUDGET_BYTES).
+  const compactBudgetBytes = 13 * 1024;
+
+  // Clients whose declaration renderer turns `const` into a one-member
+  // `enum` meet Google function declarations that accept only string enum
+  // members, so one boolean literal fails the whole catalog
+  // (morluto/rea#4025). The canonical Zod schema still enforces the literal.
+  it("advertises no non-string const or enum values in any profile", () => {
+    const offending = TOOL_CONTRACTS.flatMap((contract) => {
+      const full = advertisedInputJsonSchema(contract);
+      const compact = presentAdvertisedInputSchema(full, {
+        budgetBytes: compactBudgetBytes,
+      });
+      return [
+        ...nonStringLiteralPaths(full, `${contract.name}(full)`, []),
+        ...nonStringLiteralPaths(compact, `${contract.name}(compact)`, []),
+      ];
+    });
+    expect(offending).toEqual([]);
+  });
+
+  it("presents boolean literals as typed booleans and keeps their defaults", () => {
+    const schema = z.union([
+      z.strictObject({
+        target_id: z.string(),
+        include_script_sources: z.literal(false).default(false),
+      }),
+      z.strictObject({
+        target_id: z.string(),
+        include_script_sources: z.literal(true),
+      }),
+    ]);
+    const presented = presentInputJsonSchema(
+      z.toJSONSchema(schema, { io: "input", target: "draft-2020-12" }),
+      () => undefined,
+    );
+    expect(presented.properties).toMatchObject({
+      target_id: { type: "string" },
+      include_script_sources: { type: "boolean", default: false },
+    });
+    expect(presented).not.toHaveProperty([
+      "properties",
+      "include_script_sources",
+      "anyOf",
+    ]);
+    expect(nonStringLiteralPaths(presented, "root", [])).toEqual([]);
+    const validate = new Ajv2020({ strict: false }).compile(presented);
+    for (const input of [
+      { target_id: "page" },
+      { target_id: "page", include_script_sources: true },
+      { target_id: "page", include_script_sources: false },
+    ]) {
+      expect(schema.safeParse(input).success).toBe(true);
+      expect(validate(input)).toBe(true);
+    }
+    expect(validate({ target_id: "page", include_script_sources: "yes" })).toBe(
+      false,
+    );
+  });
+});
+
+describe("advertised boolean literal unions", () => {
+  it("keeps a boolean literal that discriminates nested object alternatives", () => {
+    const presented = presentInputJsonSchema(
+      {
+        type: "object",
+        properties: {
+          source: {
+            oneOf: [
+              {
+                type: "object",
+                properties: { included: { type: "boolean", const: false } },
+                required: ["included"],
+              },
+              {
+                type: "object",
+                properties: {
+                  included: { type: "boolean", const: true },
+                  text: { type: "string" },
+                },
+                required: ["included", "text"],
+              },
+            ],
+          },
+        },
+      },
+      () => undefined,
+    );
+    expect(nonStringLiteralPaths(presented, "root", [])).toEqual([]);
+    const source = (presented.properties as Record<string, unknown>).source;
+    // Without the literal the second branch covers the first, so the union
+    // is advertised inclusively; an exclusive oneOf would reject valid input.
+    expect(source).not.toHaveProperty("oneOf");
+    expect(source).toMatchObject({
+      anyOf: [
+        { properties: { included: { type: "boolean" } } },
+        { properties: { included: { type: "boolean" }, text: {} } },
+      ],
+    });
+    const validate = new Ajv2020({ strict: false }).compile(presented);
+    for (const input of [
+      { source: { included: false } },
+      { source: { included: true, text: "x" } },
+      { source: { included: true, text: "x", reason: "extra" } },
+    ])
+      expect(validate(input), JSON.stringify(input)).toBe(true);
+    expect(validate({ source: { included: "yes" } })).toBe(false);
+  });
+
+  it("keeps the examples of folded boolean alternatives and of the union itself", () => {
+    const presented = presentInputJsonSchema(
+      {
+        type: "object",
+        properties: {
+          verbose: {
+            examples: [false],
+            anyOf: [
+              { type: "boolean", const: false, examples: [false] },
+              { type: "boolean", const: true, examples: [true], title: "On" },
+            ],
+          },
+        },
+      },
+      () => undefined,
+    );
+    expect(presented.properties).toEqual({
+      verbose: { type: "boolean", title: "On", examples: [false, true] },
+    });
+  });
+
+  it("recognizes a boolean discriminant reached through shared definitions", () => {
+    const presented = presentInputJsonSchema(
+      {
+        $defs: {
+          off: { type: "boolean", const: false },
+          without: {
+            type: "object",
+            properties: { included: { $ref: "#/$defs/off" } },
+            required: ["included"],
+          },
+          with: {
+            type: "object",
+            properties: {
+              included: { type: "boolean", const: true },
+              text: { type: "string" },
+            },
+            required: ["included", "text"],
+          },
+        },
+        type: "object",
+        properties: {
+          source: {
+            oneOf: [{ $ref: "#/$defs/without" }, { $ref: "#/$defs/with" }],
+          },
+        },
+      },
+      () => undefined,
+    );
+    expect(nonStringLiteralPaths(presented, "root", [])).toEqual([]);
+    const source = (presented.properties as Record<string, unknown>).source;
+    expect(source).not.toHaveProperty("oneOf");
+    expect(source).toHaveProperty("anyOf");
+    const validate = new Ajv2020({ strict: false }).compile(presented);
+    expect(validate({ source: { included: true, text: "x" } })).toBe(true);
+    expect(validate({ source: { included: false } })).toBe(true);
+  });
+});
+
+describe("advertised boolean literals behind references and predicates", () => {
+  it("follows a chain of local references to a boolean discriminant", () => {
+    const presented = presentInputJsonSchema(
+      {
+        $defs: {
+          off: { type: "boolean", const: false },
+          offAlias: { $ref: "#/$defs/off" },
+          without: {
+            type: "object",
+            properties: { included: { $ref: "#/$defs/offAlias" } },
+            required: ["included"],
+          },
+          withAlias: { $ref: "#/$defs/with" },
+          with: {
+            type: "object",
+            properties: {
+              included: { type: "boolean", const: true },
+              text: { type: "string" },
+            },
+            required: ["included", "text"],
+          },
+        },
+        type: "object",
+        properties: {
+          source: {
+            oneOf: [{ $ref: "#/$defs/without" }, { $ref: "#/$defs/withAlias" }],
+          },
+        },
+      },
+      () => undefined,
+    );
+    expect(nonStringLiteralPaths(presented, "root", [])).toEqual([]);
+    const source = (presented.properties as Record<string, unknown>).source;
+    expect(source).not.toHaveProperty("oneOf");
+    expect(source).toHaveProperty("anyOf");
+    const validate = new Ajv2020({ strict: false }).compile(presented);
+    expect(validate({ source: { included: true, text: "x" } })).toBe(true);
+    expect(validate({ source: { included: false } })).toBe(true);
+  });
+
+  it("gives up on a reference cycle instead of following it", () => {
+    // Ajv cannot compile a self-referencing definition either, so this only
+    // checks that the presentation terminates and leaves the union alone.
+    const presented = presentInputJsonSchema(
+      {
+        $defs: { loop: { $ref: "#/$defs/loop" } },
+        type: "object",
+        properties: {
+          cyclic: { oneOf: [{ $ref: "#/$defs/loop" }, { type: "string" }] },
+        },
+      },
+      () => undefined,
+    );
+    expect(presented.properties).toMatchObject({
+      cyclic: { oneOf: [{ $ref: "#/$defs/loop" }, { type: "string" }] },
+    });
+  });
+
+  it("keeps boolean literals exact under not and if", () => {
+    const presented = presentInputJsonSchema(
+      {
+        type: "object",
+        properties: {
+          enabled: { type: "boolean", not: { const: true } },
+          mode: { type: "boolean" },
+          detail: { type: "string" },
+        },
+        if: { properties: { mode: { const: true } }, required: ["mode"] },
+        then: { required: ["detail"] },
+      },
+      () => undefined,
+    );
+    expect(presented).toMatchObject({
+      properties: { enabled: { type: "boolean", not: { const: true } } },
+      if: { properties: { mode: { const: true } } },
+    });
+    const validate = new Ajv2020({ strict: false }).compile(presented);
+    expect(validate({ enabled: false })).toBe(true);
+    expect(validate({ enabled: true })).toBe(false);
+    expect(validate({ mode: true })).toBe(false);
+    expect(validate({ mode: true, detail: "x" })).toBe(true);
+    expect(validate({ mode: false })).toBe(true);
+  });
 });
 
 describe("advertised production selector contracts", () => {
