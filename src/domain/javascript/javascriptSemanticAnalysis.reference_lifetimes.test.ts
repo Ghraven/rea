@@ -665,3 +665,24 @@ describe("references captured before an intermediate rebind", () => {
     },
   );
 });
+
+describe("self aliases in front of copied-slot selections", () => {
+  // Normalization keeps copied-slot selections exact, so a self alias in front
+  // of one must escape its repeated prefix instead of growing the path.
+  it.each([
+    ["seed.opts.inner.token", "unknown"],
+    ["seed.value.opts.inner.token", "unknown"],
+    ["seed.keep", "literal"],
+  ])(
+    "escapes the repeated prefix: %s",
+    (read, status) => {
+      const start = performance.now();
+      const value = resultValue(
+        `const seed = { keep: 3, opts: { inner: { token: 1 } }, value: { opts: { inner: { token: 2 } } } }; let e = flag ? seed : seed.value; const t = { ...e.opts }; e = e.value; consume(t); return ${read};`,
+      );
+      expect(performance.now() - start).toBeLessThan(2000);
+      expect(value?.status).toBe(status);
+    },
+    30000,
+  );
+});

@@ -385,7 +385,11 @@ export function* collectSemanticMemberMutationsSteps(
         }
         if (
           repeatedPrefix !== undefined &&
-          observablePaths.repeatsUnpruned(binding.bindingId, repeatedPrefix)
+          observablePaths.repeatsUnpruned(
+            binding.bindingId,
+            repeatedPrefix,
+            current.path,
+          )
         ) {
           markValue(
             current.node,
@@ -1066,6 +1070,10 @@ interface MutationObserverNode {
   };
 }
 
+/** Copied-slot selections (from spreads and rests) stay exact path keys. */
+const carriesSelection = (path: PropertyPath): boolean =>
+  path.some((key) => key !== null && typeof key === "object");
+
 const observableMutationPaths = (
   state: JavaScriptSemanticAnalysisState,
 ): {
@@ -1077,6 +1085,7 @@ const observableMutationPaths = (
   readonly repeatsUnpruned: (
     bindingId: string,
     prefix: PropertyPath,
+    path: PropertyPath,
   ) => boolean;
 } => {
   const bindingNodes = new Map<string, MutationObserverNode>();
@@ -1299,9 +1308,7 @@ const observableMutationPaths = (
     effect: ValueEffect,
   ): PropertyPath | null => {
     let observer = bindingNodes.get(bindingId);
-    if (observer === undefined) return path;
-    if (path.some((key) => key !== null && typeof key === "object"))
-      return path;
+    if (observer === undefined || carriesSelection(path)) return path;
     if (effect === "escape") {
       observer = project(observer, path);
       settle();
@@ -1323,11 +1330,15 @@ const observableMutationPaths = (
   // repeating a prefix revisits an origin set, every longer repetition stays
   // observable and normalization can never prune it. The answer depends only
   // on the binding and prefix, so every revisit of a long chain shares it.
+  // Normalization keeps copied-slot selections exact, so it never prunes a
+  // path carrying one, however often a prefix repeats in front of it.
   const repeated = new Map<string, boolean>();
   const repeatsUnpruned = (
     bindingId: string,
     prefix: PropertyPath,
+    path: PropertyPath,
   ): boolean => {
+    if (carriesSelection(path)) return true;
     const key = JSON.stringify([bindingId, prefix]);
     const cached = repeated.get(key);
     if (cached !== undefined) return cached;
