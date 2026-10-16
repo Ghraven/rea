@@ -703,8 +703,21 @@ describe("PlaywrightBrowserScenarioProvider request cancellation", () => {
     const result = await provider.captureScenario(scenario(), {
       signal: controller.signal,
     });
-    if (!result.ok) throw result.error;
-    expect(result.value.steps[1]?.status).toBe("cancelled");
+    expect(result.ok).toBe(false);
+    if (result.ok)
+      throw new Error("Expected cancellation to retain partial observations");
+    expect(result.error).toBeInstanceOf(AnalysisCancelledError);
+    expect(result.error.cause).toBe(controller.signal.reason);
+    const partial = result.error.partialObservation;
+    expect(partial).toMatchObject({ kind: "browser-scenario-observation" });
+    if (
+      partial === undefined ||
+      !("kind" in partial) ||
+      partial.kind !== "browser-scenario-observation"
+    )
+      throw new Error("Expected retained browser scenario observations");
+    expect(partial.capture.steps[1]?.status).toBe("cancelled");
+    expect(partial.capture.browser.cleanup).toBe("terminated-owned-process");
     expect(session.closeCalls).toBe(1);
   });
 });
