@@ -112,9 +112,9 @@ if [ "$1" = version ]; then
   exit 0
 fi
 if [ "$1" = -s ] && [ "$3" = install ]; then
-  if [ "$4" = -r ]; then selected="$5"; else selected="$4"; fi
-  cmp "$selected" "$root/app.apk" || exit 1
-  printf '%s\\n' "$selected" >> "$root/snapshots"
+  for argument in "$@"; do snapshot="$argument"; done
+  printf '%s\\n' "$snapshot" >> "$root/snapshots"
+  cat "$snapshot" >> "$root/payloads" || exit 1
   if [ -f "$root/installed" ]; then
     if [ "$4" != -r ]; then
       printf 'Failure [INSTALL_FAILED_ALREADY_EXISTS]\\n'
@@ -201,6 +201,9 @@ exit 1
     }
     expect(await readFile(apk, "utf8")).toBe("apk");
     const calls = await readFile(workspace.path("calls"), "utf8");
+    expect(await readFile(workspace.path("payloads"), "utf8")).toBe(
+      "apkapkapk",
+    );
     expect(calls.split("\n").filter((line) => line !== "")).toEqual([
       "version",
       `-s emulator-5554 install -r ${snapshots[0]}`,

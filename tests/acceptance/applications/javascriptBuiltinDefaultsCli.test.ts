@@ -12,8 +12,22 @@ import { connectLocalToolsMcp } from "../../fixtures/localToolsMcp.js";
 
 const execute = promisify(execFile);
 
-it("preserves earlier and sibling effects without inventing replaced cached-module or process effects", async () => {
-  const root = await createTestTempDirectory("rea-builtin-identity-");
+const writeReceiverReviewSources = async (root: string): Promise<void> => {
+  const sources = [
+    "Object.create.call=()=>module; const r=Object.create.call(null,null); Reflect.set(r,'require',custom); require('fs').readFileSync('wrong-create');",
+    "const fs=require('fs'); const r={fs,set hook(v){this.fs.readFileSync=custom;}}; Reflect.set(r,'hook',1); fs.readFileSync('wrong-setter');",
+    "import fs = require('fs'); fs={}; fs={}; fs.readFileSync('wrong-entry');",
+    "const fs=require('fs'); Reflect.set(fs,'readFileSync',custom,{}); fs.readFileSync('receiver-data.json');",
+    "Reflect.set(module,'require',custom,-1); require('fs').readFileSync('receiver-primitive.json');",
+    "let fs; fs=require('fs'),fs.readFileSync('sequence-one.json'),fs={},fs=require('fs'),fs.readFileSync('sequence-two.json');",
+    "const fs=require('fs'); fs.globSync('*'); fs.readFileSync('glob-kept.json');",
+    "let fs=require('fs'); {{fs.readFileSync('nested-timeline.json');}} fs={};",
+  ];
+  for (const [index, source] of sources.entries())
+    await writeFile(join(root, `receiver-review-${index}.ts`), source);
+};
+
+const writeBuiltinIdentitySources = async (root: string): Promise<void> => {
   await writeFile(
     join(root, "app.cjs"),
     `
@@ -80,6 +94,47 @@ it("preserves earlier and sibling effects without inventing replaced cached-modu
     join(root, "global-process.cjs"),
     `process.env={MODE:'local'}; const proc=require('process'); const mode=proc.env.MODE;`,
   );
+  await writeFile(
+    join(root, "ordered-receivers.cjs"),
+    `let fs=require('fs'); fs.statSync('probe'); fs.readdirSync('probe');
+     fs.readFileSync('ordered-kept.json'); fs={};
+     globalThis.process.cwd(); const proc=require('process'); const mode=proc.env.REVIEW_MODE;`,
+  );
+  await writeFile(
+    join(root, "nested-write.cjs"),
+    `const fs=require('fs'); fs.readFileSync('nested-kept.json');
+     if(flag) { fs.readFileSync=custom; } fs.readFileSync('wrong-nested.json');`,
+  );
+  await writeFile(
+    join(root, "reflect-receiver.cjs"),
+    `Reflect.set(module, 'require', replacement, {});
+     const fs=require('fs'); fs.readFileSync('reflect-receiver-kept.json');`,
+  );
+  await writeFile(
+    join(root, "reflect-module.cjs"),
+    `Reflect.set({}, 'require', replacement, module);
+     const fs=require('fs'); fs.readFileSync('wrong-reflect-module.json');`,
+  );
+  await writeFile(
+    join(root, "reflect-independent.cjs"),
+    `const registry=Object.create(null); Reflect.set(registry, key, replacement);
+     Reflect.set(module, 0, replacement);
+     const fs=require('fs'); Reflect.set(fs, 'require', replacement);
+     require('fs').readFileSync('reflect-independent-kept.json');`,
+  );
+  await writeFile(
+    join(root, "repeated-reads.cjs"),
+    `let fs;
+     fs=require('fs'); fs.readFileSync('timeline-first.json'); fs={};
+     fs=require('fs'); fs.readFileSync('timeline-second.json');
+     fs.readFileSync=custom; fs.readFileSync('wrong-timeline.json');`,
+  );
+};
+
+it("preserves earlier and sibling effects without inventing replaced cached-module or process effects", async () => {
+  const root = await createTestTempDirectory("rea-builtin-identity-");
+  await writeBuiltinIdentitySources(root);
+  await writeReceiverReviewSources(root);
   const { stdout } = await execute(
     process.execPath,
     ["scripts/rea.mjs", "analyze-javascript-application", root, "--json"],
@@ -95,17 +150,30 @@ it("preserves earlier and sibling effects without inventing replaced cached-modu
       .map(({ properties }) => properties.key)
       .sort(),
   ).toEqual([
+    "REVIEW_MODE",
     "before-write.json",
     "before.json",
     "direct.json",
     "escaped.json",
+    "glob-kept.json",
     "later.json",
     "loader-after.json",
     "loader-before.json",
+    "nested-kept.json",
+    "nested-timeline.json",
+    "ordered-kept.json",
+    "receiver-data.json",
+    "receiver-primitive.json",
+    "reflect-independent-kept.json",
+    "reflect-receiver-kept.json",
     "replacement-kept.json",
     "saved-destructured.json",
     "saved.json",
+    "sequence-one.json",
+    "sequence-two.json",
     "sibling.json",
+    "timeline-first.json",
+    "timeline-second.json",
     "wrapped-kept.json",
   ]);
   expect(
@@ -128,6 +196,22 @@ it("preserves earlier and sibling effects without inventing replaced cached-modu
 
 it("excludes monkey-patched CommonJS effects from CLI and MCP evidence", async () => {
   const root = await createTestTempDirectory("rea-builtin-mutated-");
+  for (const [index, mutation] of [
+    "Object.assign(module, {[key]: replacement});",
+    "Object.assign(module, {...replacement});",
+    "Reflect.set(module, 'require', replacement);",
+    "let owner=module; owner.require=replacement; owner={};",
+  ].entries()) {
+    await writeFile(
+      join(root, `loader-${index}.cjs`),
+      `${mutation} require('fs').readFileSync('wrong-loader.json');`,
+    );
+  }
+  await writeFile(
+    join(root, "deleted-parent.cjs"),
+    `const fs=require('fs'); delete fs.promises; require('fs').promises.open('wrong');
+     require('tls').createConnection(443);`,
+  );
   await writeFile(
     join(root, "app.cjs"),
     `
@@ -185,6 +269,8 @@ it("retains CommonJS builtin effects and handle links through CLI and MCP", asyn
     throw new Error("This source must only be parsed, never executed");
     const fs = require("node:fs");
     const {spawn: launch} = require("node:child_process");
+    const cp = require("node:child_process");
+    function syncRun() { return cp.spawnSync("tool", []); }
     const timers = require("timers");
     const {get} = require("http");
     const proc = require("node:process");

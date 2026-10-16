@@ -1,4 +1,6 @@
 import * as t from "@babel/types";
+import { createSemanticModuleInterop } from "./javascriptModuleInterop.js";
+import { semanticBuiltinDataMethod } from "./javascriptSemanticDataEffectHelpers.js";
 
 import {
   semanticGlobalProcessOrigin,
@@ -18,6 +20,7 @@ import {
   clearSemanticValueCaches,
   evaluateSemanticBinding,
   evaluateSemanticExpression,
+  evaluateSemanticProvenanceAtRead,
 } from "./javascriptSemanticValues.js";
 import { semanticContainer } from "./javascriptSemanticSlots.js";
 import {
@@ -101,7 +104,7 @@ const localSetterReceiver = (
   path: readonly unknown[],
 ): readonly string[] | undefined => {
   const key = path.at(-1);
-  if (typeof key !== "string") return undefined;
+  if (typeof key !== "string" && key !== null) return undefined;
   const receiver = path.slice(0, -1);
   if (!receiver.every((segment) => typeof segment === "string"))
     return undefined;
@@ -123,7 +126,7 @@ const localSetterReceiver = (
     }
     if (!t.isObjectExpression(object)) continue;
     const keys = setterKeys(object);
-    if (keys !== null && (keys.computed || keys.names.has(key)))
+    if (keys !== null && (key === null || keys.computed || keys.names.has(key)))
       return receiver as readonly string[];
   }
   return undefined;
@@ -134,6 +137,7 @@ export function* collectSemanticMemberMutationsSteps(
   state: JavaScriptSemanticAnalysisState,
 ): Generator<void, void> {
   const parents = state.parentsByNode;
+  const interop = createSemanticModuleInterop(state);
   const observablePaths = observableMutationPaths(state);
   const returnedReferences = createSemanticReturnedReferences(state);
   const recordedRequiredEffects = new Set<string>();
@@ -465,7 +469,19 @@ export function* collectSemanticMemberMutationsSteps(
           !t.isUnaryExpression(mutation, { operator: "delete" })
         ) {
           const receiver = localSetterReceiver(origins.initializers, path);
-          if (receiver !== undefined) path = [...receiver, null];
+          if (receiver !== undefined) {
+            markValue(
+              current.node,
+              receiver,
+              current.bindings,
+              "escape",
+              mutation,
+              current.originAt,
+              current.ownerInitializer,
+              widenedGetterResult,
+            );
+            path = [...receiver, null];
+          }
         }
         // Keep an antichain of exact paths. Widening distinct member keys would
         // also invalidate unrelated siblings that never reach this effect.
@@ -755,6 +771,56 @@ export function* collectSemanticMemberMutationsSteps(
         t.isOptionalCallExpression(node) ||
         t.isNewExpression(node)
       ) {
+        const invocation = t.isNewExpression(node)
+          ? undefined
+          : interop.intrinsicInvocation(node);
+        const args = invocation?.arguments;
+        if (
+          invocation?.kind === "known" &&
+          invocation.path.join(".") === "intrinsic.Reflect.set" &&
+          !state.ambientWrites.covers(["global", "Reflect", "set"]) &&
+          args !== undefined &&
+          args.length >= 3 &&
+          !args.some(t.isSpreadElement)
+        ) {
+          const path = [interop.staticPropertyKey(args[1]) ?? null];
+          const target = unwrapJavaScriptExpression(args[0]!).node;
+          const binding = t.isIdentifier(target)
+            ? resolveBinding(target, target.name)
+            : undefined;
+          const provenance =
+            binding === undefined || !t.isIdentifier(target)
+              ? undefined
+              : evaluateSemanticProvenanceAtRead(binding, target, state);
+          const origin =
+            provenance?.status === "module"
+              ? provenance.origins[0]
+              : semanticRequireOrigin(target, state)?.origin;
+          const dataMethod =
+            origin !== undefined &&
+            path[0] !== null &&
+            semanticBuiltinDataMethod(origin, path[0]!);
+          const targetInitializers =
+            binding === undefined
+              ? [{ node: target, projection: [] }]
+              : semanticMutationInitializers(binding, node, parents)
+                  .initializers;
+          const invokesSetter =
+            localSetterReceiver(targetInitializers, path) !== undefined;
+          if (invokesSetter || path[0] === null) {
+            // A setter can mutate shared children of its `this` receiver.
+            markEscaped(target, node);
+            if (args[3] !== undefined) markEscaped(args[3], node);
+          } else {
+            if (args[3] === undefined || !dataMethod)
+              markValue(target, path, new Set(), "write", node);
+            if (args[3] !== undefined)
+              markValue(args[3], path, new Set(), "write", node);
+          }
+          markEscaped(args[1]!, node);
+          markEscaped(args[2]!, node);
+          return;
+        }
         for (const source of returnedReferences(node.callee))
           markEscaped(source.node, node, source.projection);
         for (const argument of node.arguments)
