@@ -56,7 +56,6 @@ const registerWebMcp = (
     options: z.object({
       ...browserScopeOptions,
       observationMs: z
-        .number()
         .int()
         .min(0)
         .default(100)
@@ -224,7 +223,6 @@ const registerScreenshotDiff = (
     }),
     options: z.object({
       channelThreshold: z
-        .number()
         .int()
         .min(0)
         .max(255)

@@ -4,7 +4,7 @@ import { digestSchema } from "../digests.js";
 import { jsonValueSchema, type JsonValue } from "../jsonValue.js";
 import { localPathStringSchema } from "../localPath.js";
 
-const bytes = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+const bytes = z.int().min(0).max(Number.MAX_SAFE_INTEGER);
 const range = z.strictObject({ offset: bytes, length: bytes.positive() });
 const target = {
   path: localPathStringSchema
@@ -31,14 +31,12 @@ export const firmwareInputSchemas = {
       .optional()
       .describe("Explicit file-byte interval; omit to extract the whole file"),
     max_depth: z
-      .number()
       .int()
       .min(1)
       .max(10)
       .default(3)
       .describe("Extraction depth; reaching it yields partial analysis"),
     max_output_bytes: z
-      .number()
       .int()
       .min(1)
       .max(512 * 1024 * 1024)
@@ -47,7 +45,6 @@ export const firmwareInputSchemas = {
         "Staging file-byte budget, checked during extraction; transient overshoot is possible",
       ),
     max_output_files: z
-      .number()
       .int()
       .min(1)
       .max(100_000)
@@ -141,7 +138,7 @@ export const firmwareResultSchemas = {
         reported_size: bytes,
         signature: z.string(),
         description: z.string(),
-        reported_confidence: z.number().int().min(0).max(255),
+        reported_confidence: z.int().min(0).max(255),
         size_basis: z.literal("provider_reported_validation_unknown"),
       }),
     ),

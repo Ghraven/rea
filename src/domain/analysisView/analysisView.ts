@@ -121,7 +121,7 @@ const facetViewSchema = z.strictObject({
   facet: z.enum(["mitigations", "linkage"]),
 });
 const indexSelectorSchema = z.strictObject({
-  index: z.number().int().nonnegative(),
+  index: z.int().nonnegative(),
 });
 const nameSelectorSchema = z.strictObject({ name: z.string() });
 const pathSelectorSchema = z.strictObject({
@@ -159,8 +159,8 @@ const itemViewSchema = z.discriminatedUnion("collection", [
 const pageViewSchema = z.strictObject({
   kind: z.literal("page"),
   collection: z.enum(["sections", "symbols", "modules"]),
-  offset: z.number().int().nonnegative(),
-  limit: z.number().int().positive(),
+  offset: z.int().nonnegative(),
+  limit: z.int().positive(),
 });
 
 /** Bounded native function facets of already authenticated analyze_function Evidence. */
@@ -189,8 +189,8 @@ const nativeViewSchema = z.strictObject({
     "value_flow_parameters",
     "value_flow_parameter_uses",
   ]),
-  offset: z.number().int().nonnegative().default(0),
-  limit: z.number().int().positive().default(64),
+  offset: z.int().nonnegative().default(0),
+  limit: z.int().positive().default(64),
 });
 
 /** Original inventory records in stable order, optionally matching exact paths. */
@@ -204,14 +204,14 @@ const inventoryViewSchema = z.discriminatedUnion("collection", [
       .describe(
         "Exact recorded logical paths. Omitted selects all available occurrences; an empty array selects none. This does not resolve filesystem paths.",
       ),
-    offset: z.number().int().nonnegative().default(0),
-    limit: z.number().int().positive().default(64),
+    offset: z.int().nonnegative().default(0),
+    limit: z.int().positive().default(64),
   }),
   z.strictObject({
     kind: z.literal("inventory"),
     collection: z.enum(["nodes", "edges", "integrity_contradictions"]),
-    offset: z.number().int().nonnegative().default(0),
-    limit: z.number().int().positive().default(64),
+    offset: z.int().nonnegative().default(0),
+    limit: z.int().positive().default(64),
   }),
 ]);
 
@@ -265,9 +265,9 @@ export const inspectAnalysisViewInputSchema = z.strictObject({
 
 const coverageSchema = z.strictObject({
   status: z.enum(["complete-within-view", "page", "empty"]),
-  examined: z.number().int().nonnegative(),
-  total: z.number().int().nonnegative(),
-  next_offset: z.number().int().nonnegative().nullable(),
+  examined: z.int().nonnegative(),
+  total: z.int().nonnegative(),
+  next_offset: z.int().nonnegative().nullable(),
   exhausted: z.boolean(),
 });
 
@@ -279,7 +279,7 @@ const artifactSchema = z.strictObject({
 });
 
 const layoutSummarySchema = z.strictObject({
-  bytes: z.number().int().nonnegative(),
+  bytes: z.int().nonnegative(),
   format: z.literal("elf"),
   architecture: z.strictObject({
     machine: z.literal("EM_X86_64"),
@@ -293,12 +293,12 @@ const layoutSummarySchema = z.strictObject({
     execution_status: z.literal("unknown"),
   }),
   counts: z.strictObject({
-    sections: z.number().int().nonnegative(),
-    segments: z.number().int().nonnegative(),
-    symbols: z.number().int().nonnegative(),
-    relocations: z.number().int().nonnegative(),
+    sections: z.int().nonnegative(),
+    segments: z.int().nonnegative(),
+    symbols: z.int().nonnegative(),
+    relocations: z.int().nonnegative(),
   }),
-  limitation_count: z.number().int().nonnegative(),
+  limitation_count: z.int().nonnegative(),
 });
 
 const javascriptSummarySchema = z.strictObject({
@@ -309,22 +309,22 @@ const javascriptSummarySchema = z.strictObject({
   statistics: jsonObjectSchema,
   electron: jsonObjectSchema,
   coverage: jsonObjectSchema,
-  limitation_count: z.number().int().nonnegative(),
+  limitation_count: z.int().nonnegative(),
 });
 
 const inventorySummarySchema = z.strictObject({
   manifest: artifactGraphManifestSchema,
   available_counts: z.strictObject({
-    nodes: z.number().int().nonnegative(),
-    occurrences: z.number().int().nonnegative(),
-    edges: z.number().int().nonnegative(),
-    integrity_contradictions: z.number().int().nonnegative(),
+    nodes: z.int().nonnegative(),
+    occurrences: z.int().nonnegative(),
+    edges: z.int().nonnegative(),
+    integrity_contradictions: z.int().nonnegative(),
   }),
   observed_entry_kind_counts: z.strictObject({
-    file: z.number().int().nonnegative(),
-    directory: z.number().int().nonnegative(),
-    symlink: z.number().int().nonnegative(),
-    slice: z.number().int().nonnegative(),
+    file: z.int().nonnegative(),
+    directory: z.int().nonnegative(),
+    symlink: z.int().nonnegative(),
+    slice: z.int().nonnegative(),
   }),
   source_complete: z.boolean(),
   inventory_evidence_ids: z.array(prefixedDigestSchema("ev")).min(1),
@@ -335,7 +335,7 @@ const inventorySummarySchema = z.strictObject({
         artifactInspectionResultSchema.shape.unexplored_branches,
     })
     .nullable(),
-  limitation_count: z.number().int().nonnegative(),
+  limitation_count: z.int().nonnegative(),
 });
 
 const viewResultBase = {

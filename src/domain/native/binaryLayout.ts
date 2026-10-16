@@ -4,8 +4,8 @@ import { localPathStringSchema } from "../localPath.js";
 import { CANONICAL_BASE64_PATTERN } from "../stringPatterns.js";
 
 const unsignedHex = z.string().regex(/^0x(?:0|[1-9a-f][0-9a-f]{0,15})$/);
-const index = z.number().int().nonnegative();
-const scalar = z.union([z.string(), z.number().int()]);
+const index = z.int().nonnegative();
+const scalar = z.union([z.string(), z.int()]);
 const range = z.strictObject({ offset: unsignedHex, bytes: unsignedHex });
 const canonicalBase64 = z.string().regex(CANONICAL_BASE64_PATTERN);
 const name = z.strictObject({

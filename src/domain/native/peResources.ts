@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { localPathStringSchema } from "../localPath.js";
 
-const uint = z.number().int().min(0).max(0xffffffff);
+const uint = z.int().min(0).max(0xffffffff);
 const range = z.strictObject({ offset: uint, bytes: uint });
 const identity = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("id"), id: uint }),
@@ -20,7 +20,6 @@ export const inspectPeResourcesInputSchema = z.strictObject({
     "Absolute filesystem path to a PE image",
   ),
   max_file_bytes: z
-    .number()
     .int()
     .min(64)
     .max(536870912)
@@ -32,7 +31,6 @@ export const inspectPeResourcesInputSchema = z.strictObject({
   // those stock images with headroom; the independent 8 MiB metadata budget
   // still bounds allocation.
   max_entries: z
-    .number()
     .int()
     .min(1)
     .max(65536)

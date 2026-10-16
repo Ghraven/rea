@@ -90,7 +90,7 @@ export const apktoolResultSchemas = {
     client,
     target: z.strictObject({
       path: localPathStringSchema,
-      bytes: z.number().int().nonnegative(),
+      bytes: z.int().nonnegative(),
       sha256: digestSchema,
     }),
     metadata: z.strictObject({
@@ -114,7 +114,7 @@ export const apktoolResultSchemas = {
     ),
     locale: z.string().nullable(),
     locales: z.array(z.string().min(1)),
-    decoded_file_count: z.number().int().nonnegative(),
+    decoded_file_count: z.int().nonnegative(),
     coverage: z.enum(["complete", "partial"]),
   }),
 } as const;

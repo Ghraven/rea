@@ -38,12 +38,8 @@ export const registerUtilityCommands = (
 };
 
 const nativeUiScopeOptions = {
-  pid: z.number().int().positive().describe("Existing application PID"),
-  windowId: z
-    .number()
-    .int()
-    .positive()
-    .describe("Exact selected application window ID"),
+  pid: z.int().positive().describe("Existing application PID"),
+  windowId: z.int().positive().describe("Exact selected application window ID"),
   screenshot: z
     .boolean()
     .default(true)
@@ -53,7 +49,6 @@ const nativeUiScopeOptions = {
     .default(true)
     .describe("Read the selected window accessibility tree"),
   maxNodes: z
-    .number()
     .int()
     .positive()
     .safe()
@@ -250,7 +245,6 @@ const registerReferenceSourceCommand = (
           "Complete committed graph or compact historical-source summary",
         ),
       outlineDepth: z
-        .number()
         .int()
         .safe()
         // After .safe(): its safe-range check overwrites an earlier minimum,

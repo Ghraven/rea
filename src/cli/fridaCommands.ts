@@ -76,7 +76,6 @@ export const registerFridaCommands = (
       .describe("Remote TLS certificate"),
     origin: z.string().min(1).optional().describe("Remote connection origin"),
     keepaliveInterval: z
-      .number()
       .int()
       .positive()
       .optional()
@@ -196,7 +195,6 @@ export const registerFridaCommands = (
           .optional()
           .describe("Arguments passed to a spawned target"),
         durationMs: z
-          .number()
           .int()
           .min(0)
           .max(60_000)

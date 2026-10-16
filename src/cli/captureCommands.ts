@@ -29,7 +29,6 @@ export const registerCaptureCommands = (
       .object({
         ...inspectPacketFieldsInputSchema.shape,
         limit: z
-          .number()
           .int()
           .positive()
           .max(Number.MAX_SAFE_INTEGER)
@@ -72,7 +71,6 @@ export const registerCaptureCommands = (
       .object({
         ...packetCaptureOptionsSchema.shape,
         match_limit: z
-          .number()
           .int()
           .positive()
           .optional()

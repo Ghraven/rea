@@ -5,7 +5,6 @@ import { javaScriptSourcePathsSchema } from "./domain/javascript/javascriptSourc
 /** Accept an agent-selected browser observation duration without an artificial ceiling. */
 export const observationDuration = (fallback: number, minimum = 0) =>
   z
-    .number()
     .int()
     .min(minimum)
     .default(fallback)

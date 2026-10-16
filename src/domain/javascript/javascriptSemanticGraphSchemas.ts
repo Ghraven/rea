@@ -189,8 +189,8 @@ const relativePathSchema = z
   );
 
 const sourcePointSchema = z.strictObject({
-  line: z.number().int().min(1),
-  column: z.number().int().min(0),
+  line: z.int().min(1),
+  column: z.int().min(0),
 });
 
 const sourceRangeSchema = z
@@ -290,7 +290,7 @@ export const javaScriptSemanticUnknownSchema =
   });
 
 const fingerprintComponentsSchema = z.strictObject({
-  parameter_arity: z.number().int().min(0),
+  parameter_arity: z.int().min(0),
   normalized_ast_sha256: digestSchema,
   control_flow_sha256: digestSchema,
   relation_shape_sha256: digestSchema,
@@ -329,20 +329,20 @@ export const javaScriptSemanticFingerprintSchema =
 const familyCoverageSchema = z.strictObject({
   family: z.enum(JAVASCRIPT_SEMANTIC_RELATION_FAMILIES),
   status: z.enum(["complete", "partial", "unknown", "unsupported"]),
-  retained_relations: z.number().int().min(0),
-  omitted_relations: z.number().int().min(0).nullable(),
+  retained_relations: z.int().min(0),
+  omitted_relations: z.int().min(0).nullable(),
   unknown_ids: z.array(semanticUnknownIdSchema),
 });
 
 const graphCoverageSchema = z.strictObject({
   status: z.enum(["complete", "partial", "unknown", "unavailable"]),
   truncated: z.boolean(),
-  omitted_nodes: z.number().int().min(0).nullable(),
-  omitted_relations: z.number().int().min(0).nullable(),
+  omitted_nodes: z.int().min(0).nullable(),
+  omitted_relations: z.int().min(0).nullable(),
   limits: z.array(
     z.strictObject({
       name: z.string().min(1),
-      value: z.number().int().min(0),
+      value: z.int().min(0),
       unit: z.enum(["items", "bytes", "milliseconds", "depth", "other"]),
     }),
   ),

@@ -25,8 +25,8 @@ export const javascriptModuleReferencesRequestSchema = z.strictObject({
       kind: moduleKindSchema.optional(),
     })
     .default({}),
-  offset: z.number().int().nonnegative().default(0),
-  limit: z.number().int().positive().default(64),
+  offset: z.int().nonnegative().default(0),
+  limit: z.int().positive().default(64),
 });
 
 /** Unique support states, without promoting mixed observations to one fact. */
@@ -42,7 +42,7 @@ export const javascriptModuleReferenceSchema = z.strictObject({
   kind: moduleKindSchema,
   path: z.string().nullable(),
   identity: applicationNodeIdentitySchema,
-  retained_source_range_count: z.number().int().nonnegative(),
+  retained_source_range_count: z.int().nonnegative(),
   basis: z.array(basisSchema).min(1),
 });
 
@@ -52,8 +52,8 @@ export const javascriptModuleSourceCoverageSchema = z.strictObject({
   semantic: javaScriptSemanticGraphInputSchema.shape.coverage.omit({
     families: true,
   }),
-  application_unknown_count: z.number().int().nonnegative(),
-  semantic_unknown_count: z.number().int().nonnegative(),
+  application_unknown_count: z.int().nonnegative(),
+  semantic_unknown_count: z.int().nonnegative(),
 });
 
 export type JavaScriptModuleReference = z.infer<

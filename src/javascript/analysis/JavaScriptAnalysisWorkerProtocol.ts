@@ -18,13 +18,13 @@ export const JAVASCRIPT_ANALYSIS_WORKER_DEFAULTS = {
 /** Caller-selected artifact identity, separate from the decoded source-text digest. */
 export const javaScriptWorkerRequestSchema = z.strictObject({
   id: z.uuid(),
-  node_budget: z.number().int().min(0).max(JAVASCRIPT_SEMANTIC_NODE_MAXIMUM),
+  node_budget: z.int().min(0).max(JAVASCRIPT_SEMANTIC_NODE_MAXIMUM),
   text_sha256: digestSchema,
   file: z.strictObject({
     path: z.string(),
     sha256: digestSchema,
     container_sha256: digestSchema,
-    bytes: z.number().int().nonnegative(),
+    bytes: z.int().nonnegative(),
     inventory_artifact_id: z.string(),
     kind: z.literal("javascript"),
     unpacked: z.boolean(),
@@ -34,7 +34,7 @@ export const javaScriptWorkerRequestSchema = z.strictObject({
 /** Parent admission after validated static observations have been retained. */
 export const javaScriptWorkerAdmissionSchema = z.strictObject({
   id: z.uuid(),
-  semantic_result_budget_bytes: z.number().int().nonnegative(),
+  semantic_result_budget_bytes: z.int().nonnegative(),
 });
 
 const identity = { id: z.uuid() };
@@ -44,7 +44,7 @@ export const javaScriptWorkerMessageSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("ready"),
     // Null when the worker runtime (Bun) does not enforce V8 heap flags.
-    heap_limit_bytes: z.number().int().positive().nullable(),
+    heap_limit_bytes: z.int().positive().nullable(),
   }),
   z.strictObject({
     kind: z.literal("phase"),
@@ -54,7 +54,7 @@ export const javaScriptWorkerMessageSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("static"),
     ...identity,
-    bytes: z.number().int().nonnegative(),
+    bytes: z.int().nonnegative(),
     sha256: digestSchema,
   }),
   z.strictObject({

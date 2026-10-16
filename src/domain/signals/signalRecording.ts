@@ -24,13 +24,11 @@ const signalInputShape = z.strictObject({
     .default(null)
     .describe("Optional annotation selection, e.g. uart=rx-data"),
   line_offset: z
-    .number()
     .int()
     .nonnegative()
     .default(0)
     .describe("Skip this many literal LF-separated output lines; default 0"),
   line_limit: z
-    .number()
     .int()
     .positive()
     .nullable()
@@ -80,7 +78,7 @@ export const signalRecordingSchema = z
     artifact: z.strictObject({
       path: z.string(),
       sha256: z.string().regex(/^[a-f0-9]{64}$/),
-      bytes: z.number().int().nonnegative(),
+      bytes: z.int().nonnegative(),
     }),
     selection: decodeSignalRecordingInputSchema,
     annotations_text: z
@@ -90,13 +88,12 @@ export const signalRecordingSchema = z
       ),
     output_window: z.strictObject({
       total_lines: z
-        .number()
         .int()
         .nonnegative()
         .describe(
           "Literal LF-separated lines in completed producer output, not annotation or sample counts",
         ),
-      returned_lines: z.number().int().nonnegative(),
+      returned_lines: z.int().nonnegative(),
       has_more: z.boolean(),
     }),
     diagnostics: z.string(),
@@ -115,12 +112,12 @@ export const signalRecordingSchema = z
       arguments: z.array(z.string()),
     }),
     limits: z.strictObject({
-      input_bytes: z.number().int().positive(),
-      output_bytes: z.number().int().positive(),
-      command_timeout_ms: z.number().int().positive(),
-      address_space_bytes: z.number().int().nonnegative(),
-      file_bytes: z.number().int().nonnegative(),
-      cpu_seconds: z.number().int().nonnegative(),
+      input_bytes: z.int().positive(),
+      output_bytes: z.int().positive(),
+      command_timeout_ms: z.int().positive(),
+      address_space_bytes: z.int().nonnegative(),
+      file_bytes: z.int().nonnegative(),
+      cpu_seconds: z.int().nonnegative(),
     }),
     hardware_acquisition: z.literal("not-performed"),
   })

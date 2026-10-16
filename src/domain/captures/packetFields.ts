@@ -25,14 +25,12 @@ export const inspectPacketFieldsInputSchema = z.strictObject({
       "Case-insensitive literal substring in name, abbreviation or field description",
     ),
   offset: z
-    .number()
     .int()
     .nonnegative()
     .max(Number.MAX_SAFE_INTEGER)
     .default(0)
     .describe("Number of matching records to skip; defaults to 0"),
   limit: z
-    .number()
     .int()
     .positive()
     .max(Number.MAX_SAFE_INTEGER)
@@ -46,7 +44,7 @@ export type InspectPacketFieldsInput = z.infer<
   typeof inspectPacketFieldsInputSchema
 >;
 export const packetFieldRecordSchema = z.strictObject({
-  source_line: z.number().int().positive(),
+  source_line: z.int().positive(),
   kind: z.enum(["protocol", "field"]),
   name: z.string(),
   abbreviation: z.string(),
@@ -62,9 +60,9 @@ export const packetFieldsCatalogSchema = z
     selection: inspectPacketFieldsInputSchema,
     records: z.array(packetFieldRecordSchema),
     output_window: z.strictObject({
-      examined: z.number().int().nonnegative(),
-      matching: z.number().int().nonnegative(),
-      returned: z.number().int().nonnegative(),
+      examined: z.int().nonnegative(),
+      matching: z.int().nonnegative(),
+      returned: z.int().nonnegative(),
       has_more: z.boolean(),
     }),
     diagnostics: z.string(),

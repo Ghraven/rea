@@ -19,7 +19,7 @@ const addressKeys = new Set([
   "to_address",
 ]);
 const address = z.string().regex(/^0x(?:0|[1-9a-f][0-9a-f]{0,15})$/u);
-const count = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+const count = z.int().min(0).max(Number.MAX_SAFE_INTEGER);
 const kind = z.enum(["call", "jump", "data", "read", "write"]);
 
 const graphHeader = z.object({

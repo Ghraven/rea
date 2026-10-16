@@ -4,7 +4,7 @@ import { jsonValueSchema } from "../domain/jsonValue.js";
 import type { AndroidOperation } from "../domain/android/androidAnalysis.js";
 import { dexDescriptorSchema } from "../domain/android/androidAnalysis.js";
 
-const count = z.number().int().nonnegative();
+const count = z.int().nonnegative();
 /** Selector failures authored by REA's bridge, separate from arbitrary engine errors. */
 export const jadxInputFailureSchema = z.strictObject({
   kind: z.literal("invalid-input"),
@@ -14,8 +14,8 @@ export const jadxInputFailureSchema = z.strictObject({
 /** Values observed inside the exact JVM producing the analysis. */
 export const jadxRuntimeSchema = z.object({
   engine_reported_version: z.string().min(1),
-  max_heap_bytes: z.number().int().positive().safe(),
-  available_processors: z.number().int().positive(),
+  max_heap_bytes: z.int().positive().safe(),
+  available_processors: z.int().positive(),
   java_version: z.string().min(1),
   metadata_scope: z.literal("parsed_members"),
 });
@@ -53,11 +53,11 @@ export const jadxClassSchema = z.object({
       signature: z.string(),
       dex_descriptor: dexDescriptorSchema,
       is_constructor: z.boolean(),
-      def_pos: z.number().int(),
+      def_pos: z.int(),
     }),
   ),
   fields: z.array(
-    z.object({ name: z.string(), type: z.string(), def_pos: z.number().int() }),
+    z.object({ name: z.string(), type: z.string(), def_pos: z.int() }),
   ),
   inner_classes: z.array(z.string()),
 });
@@ -86,7 +86,7 @@ export const jadxXrefsSchema = z.object({
       full_name: z.string(),
       containing_class: z.string(),
       top_class: z.string(),
-      def_pos: z.number().int(),
+      def_pos: z.int(),
       direct_invokes_exhaustive: z.boolean().optional(),
       direct_invokes: z
         .array(

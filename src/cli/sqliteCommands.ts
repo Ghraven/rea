@@ -39,7 +39,6 @@ export const registerSqliteCommands = (
           "Compact inventory by default, or selected-table details when table is supplied; database requests full schema",
         ),
       rowLimit: z
-        .number()
         .int()
         .min(1)
         .optional()

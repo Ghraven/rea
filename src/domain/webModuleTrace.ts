@@ -12,11 +12,7 @@ export const webModuleTraceInputSchema = z.strictObject({
   manifest_path: localPathStringSchema.describe(
     "Absolute path to an export_web_scripts manifest",
   ),
-  script_index: z
-    .number()
-    .int()
-    .min(0)
-    .describe("Zero-based index in manifest.scripts"),
+  script_index: z.int().min(0).describe("Zero-based index in manifest.scripts"),
   importer_url: z
     .string()
     .min(1)
@@ -42,14 +38,14 @@ export type WebModuleTraceInput = z.output<typeof webModuleTraceInputSchema>;
 export const webModuleFileSchema = z.strictObject({
   path: z.string().min(1),
   sha256: digestSchema,
-  bytes: z.number().int().min(0),
+  bytes: z.int().min(0),
 });
 export type WebModuleFile = z.output<typeof webModuleFileSchema>;
 
 const positionSchema = z.strictObject({
-  offset: z.number().int().min(0),
-  line: z.number().int().min(1),
-  column: z.number().int().min(0),
+  offset: z.int().min(0),
+  line: z.int().min(1),
+  column: z.int().min(0),
 });
 
 /** Parser observations do not assert that a dependency was loaded. */
@@ -70,7 +66,7 @@ export const webModuleResolutionSchema = z.discriminatedUnion("state", [
 export type WebModuleResolution = z.output<typeof webModuleResolutionSchema>;
 
 const candidateSchema = z.strictObject({
-  script_index: z.number().int().min(0),
+  script_index: z.int().min(0),
   match: z.enum(["exact-reported-url", "response-url-without-fragment"]),
   script: exportedWebScriptSchema,
 });
@@ -88,7 +84,7 @@ export const webModuleTraceResultSchema = z.strictObject({
     }).shape,
   }),
   source: webModuleFileSchema.extend({
-    script_index: z.number().int().min(0),
+    script_index: z.int().min(0),
     script: exportedWebScriptSchema,
   }),
   importer: z.strictObject({

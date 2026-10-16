@@ -25,13 +25,11 @@ export const jebInputSchemas = {
       .optional()
       .describe("Restrict results to descendants of this unit path"),
     index: z
-      .number()
       .int()
       .nonnegative()
       .default(0)
       .describe("Zero-based index of the first result to return"),
     count: z
-      .number()
       .int()
       .min(1)
       .max(100)
@@ -104,7 +102,7 @@ const unit = z.strictObject({
 export const jebResultSchemas = {
   inspect_jeb_client: z.strictObject({
     engine,
-    startup_ts: z.number().int().nonnegative().nullable(),
+    startup_ts: z.int().nonnegative().nullable(),
     message: z.string().nullable(),
   }),
   open_jeb_project: z.strictObject({
@@ -114,7 +112,7 @@ export const jebResultSchemas = {
     input_files: z.array(
       z.strictObject({
         file_name: z.string(),
-        file_size: z.number().int().nonnegative(),
+        file_size: z.int().nonnegative(),
         contents_sha256_hash: z.string(),
       }),
     ),
@@ -124,8 +122,8 @@ export const jebResultSchemas = {
     engine,
     filter: z.string().nullable(),
     parent_unit_path: z.string().nullable(),
-    index: z.number().int().nonnegative(),
-    count: z.number().int().positive(),
+    index: z.int().nonnegative(),
+    count: z.int().positive(),
     units: z.array(unit),
     coverage: z.enum(["complete", "partial"]),
   }),

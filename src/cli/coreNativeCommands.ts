@@ -32,7 +32,6 @@ export const registerCoreNativeCommands = (
         .optional()
         .describe("Continuation from the same query's next_cursor"),
       limit: z
-        .number()
         .int()
         .min(1)
         .max(1000)
@@ -81,12 +80,7 @@ export const registerCoreNativeCommands = (
       address: z.string().describe("Exact provider memory address"),
     }),
     options: z.object({
-      length: z
-        .number()
-        .int()
-        .min(1)
-        .default(256)
-        .describe("Requested byte count"),
+      length: z.int().min(1).default(256).describe("Requested byte count"),
       ...nativeOpenOptionFields,
     }),
     run: ({ args, options }) =>
@@ -128,48 +122,37 @@ export const registerCoreNativeCommands = (
     }),
     options: z.object({
       maxDepth: z
-        .number()
         .int()
         .min(0)
         .max(16)
         .default(3)
         .describe("Maximum call traversal depth"),
       maxFunctions: z
-        .number()
         .int()
         .min(1)
         .max(64)
         .default(16)
         .describe("Maximum function decompilations"),
       maxCallSites: z
-        .number()
         .int()
         .min(1)
         .max(4096)
         .default(256)
         .describe("Maximum static call-site resolutions"),
       maxNodes: z
-        .number()
         .int()
         .min(1)
         .max(20000)
         .default(5000)
         .describe("Maximum retained graph nodes"),
       maxEdges: z
-        .number()
         .int()
         .min(1)
         .max(40000)
         .default(10000)
         .describe("Maximum retained graph edges"),
-      offset: z
-        .number()
-        .int()
-        .min(0)
-        .default(0)
-        .describe("First graph node index"),
+      offset: z.int().min(0).default(0).describe("First graph node index"),
       limit: z
-        .number()
         .int()
         .min(1)
         .max(5000)
@@ -265,7 +248,6 @@ const registerNativeDispatchMetadataCommand = (
     }),
     options: z.object({
       maxRecords: z
-        .number()
         .int()
         .min(1)
         .max(20_000)
@@ -309,21 +291,18 @@ const registerNativeUiActionCommand = (
     }),
     options: z.object({
       maxDepth: z
-        .number()
         .int()
         .min(0)
         .max(32)
         .default(8)
         .describe("Maximum relationship depth"),
       maxNodes: z
-        .number()
         .int()
         .min(1)
         .max(2_000)
         .default(250)
         .describe("Maximum returned graph nodes"),
       maxEdges: z
-        .number()
         .int()
         .min(1)
         .max(5_000)

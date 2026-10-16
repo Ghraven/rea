@@ -59,13 +59,11 @@ export const registerJebCommands = (
         .optional()
         .describe("Restrict results to descendants of this unit path"),
       index: z
-        .number()
         .int()
         .nonnegative()
         .default(0)
         .describe("Zero-based index of the first result to return"),
       count: z
-        .number()
         .int()
         .min(1)
         .max(100)
