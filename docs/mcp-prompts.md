@@ -1,6 +1,6 @@
 # Guided MCP prompts and completion
 
-REA exposes six provider-neutral investigation workflows through the MCP
+REA exposes seven provider-neutral investigation workflows through the MCP
 `prompts` capability. They complement the generated tool catalog; they do not add, remove, or
 invoke tools by themselves.
 
@@ -12,6 +12,7 @@ invoke tools by themselves.
 | `compare_application_versions`    | Compare two shipped artifacts, with optional static and runtime follow-up.           |
 | `verify_reconstruction`           | Evaluate a finite reconstruction specification against retained comparison Evidence. |
 | `trace_crash`                     | Correlate a crash symptom with static paths and optional process capture evidence.   |
+| `review_native_vulnerabilities`   | Guide an evidence-based, defensive static review of native binary vulnerabilities.   |
 | `audit_residual_unknowns`         | Audit current residual-unknown heads and evidence-qualified resolution.              |
 | `prepare_bounded_process_capture` | Design a bounded controlled process experiment before execution.                     |
 
@@ -37,6 +38,19 @@ action; this does not establish support for every directory format.
 For target paths in `compare_application_versions`, the prompt suggests
 opening each target before calling `inspect_artifact`; inspection operates on
 the active target and returns the graph and findings together inline.
+
+`review_native_vulnerabilities` composes existing static analysis tools for
+native parser, entry-point, or sink review. It separates observed paths cited
+by Evidence from input-controllability and severity inferences, and keeps
+unresolved reachability or missing mitigation facts as Unknowns. Its guidance
+is defensive and remediation-oriented: it does not execute the target or
+provide exploit construction details; a trigger condition or precondition is
+enough. CWE class and severity are inferences, not tool observations. The tools
+can add Evidence and Unknowns to the REA session while leaving the analyzed
+target unchanged. The prompt targets the active analysis document, switching
+targets through `open_binary`. It requests a retained layout summary and the
+`mitigations` view, then starts symbol discovery with focused procedure and
+cross-reference searches; a complete symbol inventory is a fallback.
 
 Use standard MCP discovery and retrieval:
 
