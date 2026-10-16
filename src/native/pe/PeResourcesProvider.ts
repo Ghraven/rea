@@ -74,10 +74,12 @@ const peResourcesFailurePrimary = (
   if (signal?.aborted) return new AnalysisCancelledError(operation, { cause });
 
   if (cause instanceof ArtifactReaderFailure) {
+    // An input byte budget is a file-size bound, not a memory constraint, and
+    // an entry budget is a capacity bound. Report what was actually exceeded.
     if (cause.reason === "limit")
       return new AnalysisResourceConstraintError(
         operation,
-        "memory",
+        cause.boundary ?? "memory",
         cause.message,
         {
           max_file_bytes: input.max_file_bytes,

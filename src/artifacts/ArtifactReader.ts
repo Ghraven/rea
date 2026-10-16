@@ -9,9 +9,17 @@ import type {
   AnalysisPartialObservation,
 } from "../domain/analysisErrorBase.js";
 
+/** Which bound a `limit` failure hit, so callers need not infer it. */
+export type ArtifactReaderBoundary = "file-size" | "capacity" | "memory";
+
 export interface ArtifactReaderFailureOptions extends ErrorOptions {
   readonly cleanup?: AnalysisCleanupObservation;
   readonly partialObservation?: AnalysisPartialObservation;
+  /**
+   * The constrained bound for a `limit` reason. Callers report the resource
+   * from this instead of assuming every budget is memory.
+   */
+  readonly boundary?: ArtifactReaderBoundary;
 }
 
 /** Archive-neutral entry metadata. Reader adapters never choose output paths. */
@@ -132,6 +140,8 @@ export interface ArtifactReader {
 export class ArtifactReaderFailure extends Error {
   readonly cleanup: AnalysisCleanupObservation | undefined;
   readonly partialObservation: AnalysisPartialObservation | undefined;
+  /** The constrained bound for a `limit` reason, when the reader knows it. */
+  readonly boundary: ArtifactReaderBoundary | undefined;
 
   constructor(
     readonly reason:
@@ -155,6 +165,7 @@ export class ArtifactReaderFailure extends Error {
     this.name = "ArtifactReaderFailure";
     this.cleanup = options?.cleanup;
     this.partialObservation = options?.partialObservation;
+    this.boundary = options?.boundary;
   }
 
   /** Preserve the primary failure while attaching cleanup and any complete observation. */
