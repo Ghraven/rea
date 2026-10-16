@@ -51,6 +51,10 @@ import {
 
 type PropertyPath = JavaScriptSemanticPropertyPath;
 type ValueEffect = "write" | "escape";
+type SemanticCaptureOrigins = Pick<
+  JavaScriptSemanticBindingState,
+  "initializers" | "referenceInitializers" | "directOrigins"
+>;
 
 /** Preserve uncertainty from property writes and references exposed to calls, yielding during traversal and fixpoint iteration. */
 
@@ -244,6 +248,26 @@ export function* collectSemanticMemberMutationsSteps(
   // A capture key already ends the array; a path stays one nested element.
   const lifetimeKey = (captureKey: string, path: PropertyPath): string =>
     `${captureKey.slice(0, -1)},${JSON.stringify(path)}]`;
+  // An owner initializer names one copied value; otherwise origins depend on
+  // where the alias captured the binding.
+  const captureOrigins = (
+    binding: JavaScriptSemanticBindingState,
+    capture: {
+      readonly originAt: t.Node | undefined;
+      readonly ownerInitializer?: t.Node;
+    },
+  ): SemanticCaptureOrigins =>
+    capture.ownerInitializer !== undefined
+      ? {
+          initializers: binding.initializers.filter(
+            ({ node }) => node === capture.ownerInitializer,
+          ),
+          referenceInitializers: [],
+          directOrigins: [],
+        }
+      : capture.originAt === undefined
+        ? binding
+        : semanticMutationInitializers(binding, capture.originAt, parents);
   const pendingReferences: {
     readonly initializer: JavaScriptSemanticBindingState["referenceInitializers"][number];
     readonly path: PropertyPath;
@@ -441,29 +465,16 @@ export function* collectSemanticMemberMutationsSteps(
             index === selectorIndex ? { ...selector, excludedKeys } : key,
           );
         }
-        const origins =
-          current.ownerInitializer !== undefined
-            ? {
-                initializers: binding.initializers.filter(
-                  ({ node }) => node === current.ownerInitializer,
-                ),
-                referenceInitializers: [],
-                directOrigins: [],
-              }
-            : current.originAt === undefined
-              ? binding
-              : semanticMutationInitializers(
-                  binding,
-                  current.originAt,
-                  parents,
-                );
         // A setter on the binding's own literal runs on assignment and may
         // replace any member of its receiver, so the written key is unknown.
-        // Deleting the accessor never calls it.
+        // Deleting the accessor never calls it. Only that check needs origins
+        // before coverage; most revisits stop there, so others select later.
+        let origins: SemanticCaptureOrigins | undefined;
         if (
           effect === "write" &&
           !t.isUnaryExpression(mutation, { operator: "delete" })
         ) {
+          origins = captureOrigins(binding, current);
           const receiver = localSetterReceiver(origins.initializers, path);
           if (receiver !== undefined) path = [...receiver, null];
         }
@@ -488,6 +499,7 @@ export function* collectSemanticMemberMutationsSteps(
           coveringPaths.set(pathState, covering);
         }
         if (!covering.retain(path)) continue;
+        origins ??= captureOrigins(binding, current);
         // A recorded write invalidates the binding to a non-primitive value, so
         // only its first write can target a primitive. Re-evaluating it would
         // replay every earlier write and make repeated writes superlinear.
