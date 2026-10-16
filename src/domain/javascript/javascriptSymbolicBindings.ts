@@ -462,7 +462,10 @@ export class JavaScriptSymbolicBindings {
     }
     if (t.isSequenceExpression(node))
       return this.evaluate(node.expressions.at(-1), env);
-    if (t.isAssignmentExpression(node)) return this.evaluate(node.right, env);
+    if (t.isAssignmentExpression(node))
+      return node.operator === "="
+        ? this.evaluate(node.right, env)
+        : symbolicUnknown("compound assignment result");
     if (t.isAwaitExpression(node)) return this.evaluate(node.argument, env);
     if (t.isUnaryExpression(node)) {
       const value = this.evaluate(node.argument, env);
@@ -979,11 +982,9 @@ export class JavaScriptSymbolicBindings {
       !t.isForOfStatement(site) &&
       !t.isForInStatement(site)
     ) {
-      this.#indexWrite(
-        direct,
-        t.isAssignmentExpression(site) ? site.right : site,
-        site,
-      );
+      // Retain the operator so stored writes use the same result semantics as
+      // inline assignments, rather than treating every write as its RHS.
+      this.#indexWrite(direct, site, site);
       return;
     }
     for (const leaf of semanticWriteTargets(target))

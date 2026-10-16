@@ -624,6 +624,89 @@ it.each(["({})", "load(2)"])(
     expect(result.electron.call_paths ?? []).toEqual([]);
   },
 );
+it.each([
+  ["flag -= 1", true],
+  ["flag = 0", false],
+  ["flag -= step", true],
+  ["flag += 0", true],
+  ["flag &= 2", true],
+  ["flag &&= 0", true],
+  ["flag ||= 0", true],
+  ["flag ??= 0", true],
+] as const)(
+  "preserves contextual IPC candidates for assignment test %s",
+  (test, uncertain) => {
+    const result = analyzeJavaScriptStaticSource(`
+      const {contextBridge, ipcRenderer} = require("electron");
+      function action(step) {
+        let flag = 1;
+        if ((${test})) ipcRenderer.send("channel-then");
+        else ipcRenderer.send("channel-else");
+      }
+      contextBridge.exposeInMainWorld("desktop", {action});
+    `);
+    expect(result.electron.ipc.map(({ channel }) => channel).sort()).toEqual([
+      "channel-else",
+      "channel-then",
+    ]);
+    const paths = result.electron.call_paths
+      ?.filter(({ entry }) => entry === "desktop.action")
+      .map(({ channel, conditions, resolution }) => ({
+        channel,
+        conditions: conditions.map(({ expression }) => expression),
+        resolution,
+      }))
+      .sort((a, b) => String(a.channel).localeCompare(String(b.channel)));
+    expect(paths).toEqual([
+      {
+        channel: "channel-else",
+        conditions: uncertain ? [`!(${test})`] : [],
+        resolution: "candidate",
+      },
+      ...(uncertain
+        ? [
+            {
+              channel: "channel-then",
+              conditions: [test],
+              resolution: "candidate",
+            },
+          ]
+        : []),
+    ]);
+  },
+);
+it.each([
+  ["exports.flag = 1; exports.flag -= 1", "helper.flag", true],
+  ["exports.flag = 0", "helper.flag", false],
+  [
+    "module.exports = {flag: 1}; module.exports += {flag: 0}",
+    "helper.flag",
+    true,
+  ],
+  ["module.exports = {flag: 0}", "helper.flag", false],
+] as const)(
+  "preserves assignment semantics through module writes: %s",
+  (writes, test, uncertain) => {
+    const source = bundle(`
+      electron.contextBridge.exposeInMainWorld("desktop", {action() {
+        if (${test}) electron.ipcRenderer.send("channel-then");
+        else electron.ipcRenderer.send("channel-else");
+      }});
+    `).replace("exports.sender =", `${writes}; exports.sender =`);
+    const result = analyzeJavaScriptStaticSource(source);
+    const paths = result.electron.call_paths
+      ?.filter(({ entry }) => entry === "desktop.action")
+      .map(({ channel, conditions }) => ({
+        channel,
+        conditions: conditions.map(({ expression }) => expression),
+      }))
+      .sort((a, b) => String(a.channel).localeCompare(String(b.channel)));
+    expect(paths).toEqual([
+      { channel: "channel-else", conditions: uncertain ? [`!(${test})`] : [] },
+      ...(uncertain ? [{ channel: "channel-then", conditions: [test] }] : []),
+    ]);
+  },
+);
 it("does not follow a statically false callback branch", () => {
   const result = analyzeJavaScriptStaticSource(
     bundle(
