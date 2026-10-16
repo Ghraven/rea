@@ -69,6 +69,7 @@ it.each([false, true])(
       },
     );
     const output: unknown = JSON.parse(stdout);
+    expect(original.cleanupIncomplete).toBe(true);
     expect(output).toMatchObject({
       code: "cleanup_incomplete",
       details: {
@@ -82,6 +83,52 @@ it.each([false, true])(
       });
   },
 );
+
+it("accepts cleanup resolution only from the owning service", async () => {
+  const original = new ProviderCleanupError(
+    "tshark-capture",
+    ["owned-workspace"],
+    { reason: "initial cleanup failure" },
+    { operation: "inspect_packet_capture" },
+  );
+  const cli = Cli.create("capture-owned-cleanup-test", { sync: false });
+  registerCaptureCommands(
+    cli,
+    silentLogger,
+    {},
+    {
+      inspectFields: async () => {
+        throw new Error("Unexpected field discovery call");
+      },
+      inspect: async () => err(original),
+      close: async () => {
+        original.resolveCleanup();
+      },
+    },
+  );
+  let stdout = "";
+  await cli.serve(
+    [
+      "inspect-packet-capture",
+      "recording.pcap",
+      "--fields",
+      "ip.addr",
+      "--format",
+      "json",
+    ],
+    {
+      stdout: (text) => {
+        stdout += text;
+      },
+      exit: () => {},
+    },
+  );
+  expect(original.cleanupIncomplete).toBe(false);
+  const output = JSON.parse(stdout);
+  expect(output).toMatchObject({ code: "execution_failure" });
+  expect(output.details).not.toHaveProperty("cleanup");
+  expect(output.details).not.toHaveProperty("resources");
+});
 
 it("keeps the primary CLI failure when close throws an untyped error", async () => {
   const cli = Cli.create("capture-cleanup-primary-test", { sync: false });

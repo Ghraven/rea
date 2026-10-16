@@ -34,9 +34,9 @@ export const finishAnalysisCommand = async <
     };
   }
   try {
+    // Only the resource owner can resolve an earlier cleanup failure. Closing
+    // this service does not prove that every resource in that error was released.
     await service.close();
-    if (!result.ok && result.error.cleanupIncomplete)
-      result.error.resolveCleanup();
   } catch (cause) {
     let cleanup: AnalysisError;
     if (cause instanceof AnalysisError) cleanup = cause;
