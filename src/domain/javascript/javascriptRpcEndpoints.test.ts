@@ -30,6 +30,10 @@ describe("RPC object property ownership", () => {
     ['url: "/trpc/live", [0x1n]: {}', "/trpc/live"],
     ['url: "/trpc/live", [0b1n]: {}', "/trpc/live"],
     ['url: "/trpc/live", [-1n]: {}', "/trpc/live"],
+    ['url: "/trpc/live", [true]: {}', "/trpc/live"],
+    ['url: "/trpc/live", [null]: {}', "/trpc/live"],
+    ['url: "/trpc/live", [-1]: {}', "/trpc/live"],
+    ['url: "/trpc/live", [-0]: {}', "/trpc/live"],
   ] as const)(
     "reads only the final known link URL from {%s}",
     (options, value) => {
@@ -49,6 +53,10 @@ describe("RPC object property ownership", () => {
     ["get name() { return runtimeName; }", null, null],
     ["...options", null, null],
     ["[key]: runtimeValue", null, null],
+    ["[true]: 1", "Old", "graphql:query"],
+    ["[null]: 1", "Old", "graphql:query"],
+    ["[-1]: 1", "Old", "graphql:query"],
+    ["[-0]: 1", "Old", "graphql:query"],
   ] as const)(
     "honors final GraphQL document properties: %s",
     (override, value, mechanism) => {

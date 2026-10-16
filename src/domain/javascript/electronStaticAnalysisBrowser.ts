@@ -15,7 +15,6 @@ import {
   collectContextBridgeMembers,
   electronCalleePath,
   electronStaticValue,
-  objectProperty,
 } from "./electronStaticAnalysisValues.js";
 import { compareUnicodeCodePoints } from "../unicodeCodePointOrder.js";
 import { addLocatedFinding } from "./javascriptStaticAnalysisFindings.js";
@@ -27,6 +26,7 @@ import {
 } from "./javascriptStaticAnalysisHelpers.js";
 import {
   semanticStaticPropertyKey,
+  staticObjectProperty,
   unwrapJavaScriptExpression,
 } from "./javascriptAstValues.js";
 import type { JavaScriptFindingContext } from "./javascriptStaticAnalysisState.js";
@@ -85,7 +85,7 @@ const collectWindowOptions = (
   readonly preload: ElectronBrowserWindowPreload;
   readonly unknown: number;
 } => {
-  const lookup = objectProperty(options, "webPreferences");
+  const lookup = staticObjectProperty(options, "webPreferences");
   const preferences =
     lookup.status === "explicit"
       ? unwrapJavaScriptExpression(lookup.property.value).node
@@ -111,7 +111,7 @@ const collectWebPreferences = (
 } => {
   const preferences: ElectronWebPreference[] = [];
   let unknown = 0;
-  const effectivePreload = objectProperty(object, "preload");
+  const effectivePreload = staticObjectProperty(object, "preload");
   const preloadPath =
     effectivePreload.status === "explicit"
       ? staticPath(effectivePreload.property.value)
@@ -228,7 +228,7 @@ const inspectUtilityProcess = (
   const modulePath =
     moduleNode === undefined ? undefined : staticPath(moduleNode);
   const options = argumentNode(node.arguments[2]);
-  const serviceNameProperty = objectProperty(options, "serviceName");
+  const serviceNameProperty = staticObjectProperty(options, "serviceName");
   const serviceName =
     serviceNameProperty.status === "explicit"
       ? staticPath(serviceNameProperty.property.value)
