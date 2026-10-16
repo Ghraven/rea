@@ -92,6 +92,50 @@ describe("nullable redirect resource types", () => {
   });
 });
 
+describe("response sources with incomplete network metadata", () => {
+  it("retains a known source change without declaring incomplete redirects equal", () => {
+    const before = redirectCapture(null);
+    before.network.requests[0]!.response_source = {
+      service_worker: false,
+      disk_cache: false,
+      service_worker_response_source: "network",
+    };
+    const after = structuredClone(before);
+    after.network.requests[0]!.response_source!.service_worker = true;
+    expect(compare(before, after)).toMatchObject({
+      status: "changed",
+      total_changes: 1,
+    });
+    delete after.network.requests[0]!.response_source;
+    expect(compare(before, after)).toMatchObject({
+      status: "unknown",
+      total_changes: 0,
+    });
+    before.network.requests[0]!.redirects![0]!.resource_type = "Document";
+    after.network.requests[0]!.redirects![0]!.resource_type = "Document";
+    expect(compare(before, after)).toMatchObject({
+      status: "unchanged",
+      total_changes: 0,
+    });
+  });
+
+  it("does not use response sources to establish an unknown request identity", () => {
+    const before = redirectCapture("Document");
+    before.network.requests[0]!.response_source = {
+      service_worker: false,
+      disk_cache: false,
+      service_worker_response_source: "network",
+    };
+    const after = structuredClone(before);
+    before.network.requests[0]!.resource_type = null;
+    after.network.requests[0]!.response_source!.service_worker = true;
+    expect(compare(before, after)).toMatchObject({
+      status: "unknown",
+      total_changes: 0,
+    });
+  });
+});
+
 describe("passive network inventory changes", () => {
   it.each(["websocket_connections", "websocket_frames"] as const)(
     "does not infer duplicate WebSocket inventory changes from dropped %s",

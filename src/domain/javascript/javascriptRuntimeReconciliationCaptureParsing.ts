@@ -5,6 +5,7 @@ import {
   browserEndpointSchema,
   recordedBrowserObservationEndpointSchema,
 } from "../browserObservation.js";
+import { browserWorkerEvidenceScopeSchema } from "../browserWorkerEvidenceScope.js";
 import {
   webPageInspectionSchema,
   type WebPageInspection,
@@ -189,9 +190,12 @@ const parseBrowserCapture = (
       kind: "browser",
       targetId: inspection.target.target_id,
       targetOrigin: inspection.target.origin,
-      sourceIncluded: inspection.scripts.items.some(
-        ({ source }) => source.included,
-      ),
+      workers: inspection.workers,
+      sourceIncluded:
+        inspection.scripts.items.some(({ source }) => source.included) ||
+        inspection.workers.some((worker) =>
+          worker.observation?.scripts.some(({ source }) => source.included),
+        ),
     },
     path,
   );
@@ -200,7 +204,17 @@ const parseBrowserCapture = (
     evidence,
     inspection,
     captureSha256: digestCanonicalValue(inspection, "Runtime reconciliation"),
-    scriptsCompleteWithinScope: scriptsComplete(inspection.completeness),
+    scriptsCompleteWithinScope:
+      scriptsComplete(inspection.completeness) &&
+      workerDiscoveryComplete(inspection.completeness) &&
+      inspection.workers.every(
+        (worker) =>
+          worker.observation !== undefined &&
+          ((worker.observation.ownership === "unknown" &&
+            !worker.observation.selected_explicitly) ||
+            (scriptsComplete(worker.observation.completeness) &&
+              workerDiscoveryComplete(worker.observation.completeness))),
+      ),
   };
 };
 
@@ -414,6 +428,7 @@ const assertRuntimeParameters = (
         readonly kind: "browser";
         readonly targetId: string;
         readonly targetOrigin: string;
+        readonly workers: WebPageInspection["workers"];
         readonly sourceIncluded: boolean;
       }
     | {
@@ -456,6 +471,14 @@ const assertRuntimeParameters = (
         [...path, "parameters", "include_script_sources"],
         "Runtime Evidence contains source without source-capture selection",
       );
+    parseAtPath(
+      (value) => browserWorkerEvidenceScopeSchema.parse(value),
+      {
+        parameters: evidence.parameters,
+        normalized_result: { workers: expected.workers },
+      },
+      path,
+    );
     return;
   }
   const parameters = parseAtPath(
@@ -479,7 +502,7 @@ const assertRuntimeParameters = (
     );
 };
 
-const scriptsComplete = (completeness: {
+export const scriptsComplete = (completeness: {
   readonly truncated_sections: readonly string[];
   readonly unavailable_sections: readonly string[];
   readonly dropped_events: { readonly scripts: number };
@@ -487,3 +510,7 @@ const scriptsComplete = (completeness: {
   !completeness.truncated_sections.includes("scripts") &&
   !completeness.unavailable_sections.includes("scripts") &&
   completeness.dropped_events.scripts === 0;
+
+const workerDiscoveryComplete = (completeness: BrowserCompleteness): boolean =>
+  !completeness.unavailable_sections.includes("workers") &&
+  !completeness.truncated_sections.includes("workers");

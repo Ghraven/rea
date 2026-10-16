@@ -300,16 +300,34 @@ const networkIdentityCoverage = (
   return { complete, ambiguousIdentities };
 };
 
-const networkResponseFields = [
+const requiredNetworkResponseFields = [
   "status",
   "mime_type",
   "encoded_data_length",
 ] as const;
+const networkResponseFields = [
+  ...requiredNetworkResponseFields,
+  "service_worker",
+  "disk_cache",
+  "service_worker_response_source",
+] as const;
 const redirectMetadataFields = [
-  ...networkResponseFields,
+  ...requiredNetworkResponseFields,
   "resource_type",
 ] as const;
-type NetworkMetadataField = (typeof redirectMetadataFields)[number];
+type NetworkMetadataField =
+  | (typeof networkResponseFields)[number]
+  | (typeof redirectMetadataFields)[number];
+
+const networkResponseValue = (
+  request: WebPageInspection["network"]["requests"][number],
+  field: NetworkMetadataField,
+): string | number | boolean | null =>
+  field === "service_worker" ||
+  field === "disk_cache" ||
+  field === "service_worker_response_source"
+    ? (request.response_source?.[field] ?? null)
+    : request[field];
 
 /** Own both comparable fields and completeness instead of deriving it from set sizes. */
 const sharedNetworkMetadata = (
@@ -321,30 +339,33 @@ const sharedNetworkMetadata = (
 } => {
   const shared = new Map<string, Set<NetworkMetadataField>>();
   let complete = true;
-  const retainKnownFields = (
+  const retainKnownFields = <Field extends NetworkMetadataField>(
     identity: string,
-    metadata: Pick<
-      WebPageInspection["network"]["requests"][number],
-      NetworkMetadataField
-    >,
-    required: readonly NetworkMetadataField[],
+    value: (field: Field) => string | number | boolean | null,
+    required: readonly Field[],
+    comparable: readonly Field[] = required,
   ): void => {
-    const fields = shared.get(identity) ?? new Set(required);
-    for (const field of required)
-      if (metadata[field] === null) {
+    const fields = shared.get(identity) ?? new Set(comparable);
+    for (const field of comparable)
+      if (value(field) === null) {
         fields.delete(field);
-        complete = false;
+        if (required.includes(field)) complete = false;
       }
     shared.set(identity, fields);
   };
   for (const inspection of [before, after])
     for (const request of inspection.network.requests) {
       const identity = networkIdentity(request);
-      retainKnownFields(identity, request, networkResponseFields);
+      retainKnownFields(
+        identity,
+        (field) => networkResponseValue(request, field),
+        requiredNetworkResponseFields,
+        networkResponseFields,
+      );
       for (const [index, redirect] of (request.redirects ?? []).entries())
         retainKnownFields(
           redirectNetworkIdentity(identity, index),
-          redirect,
+          (field) => redirect[field],
           redirectMetadataFields,
         );
     }
@@ -515,7 +536,7 @@ const networkMap = (
     const values = grouped.get(identity) ?? [];
     const response: Record<string, unknown> = {};
     for (const field of projection.metadataFields.get(identity) ?? [])
-      response[field] = request[field];
+      response[field] = networkResponseValue(request, field);
     values.push(
       digestCanonicalValue({
         ...response,
@@ -529,12 +550,14 @@ const networkMap = (
             index,
           ) => {
             const response: Partial<
-              Record<NetworkMetadataField, number | string>
+              Record<(typeof redirectMetadataFields)[number], number | string>
             > = {};
-            for (const field of projection.metadataFields.get(
+            const fields = projection.metadataFields.get(
               redirectNetworkIdentity(identity, index),
-            ) ?? [])
-              if (redirect[field] !== null) response[field] = redirect[field];
+            );
+            for (const field of redirectMetadataFields)
+              if (fields?.has(field) && redirect[field] !== null)
+                response[field] = redirect[field];
             return {
               url: redirect.url,
               response_url: redirect.response_url,

@@ -67,7 +67,7 @@ export const handleScriptParsed = (
   const scriptId = cdpStringValue(params.scriptId);
   const rawUrl = cdpStringValue(params.url) ?? "";
   const sanitized = allowedSanitizedUrl(rawUrl, state.allowedOrigins);
-  if (scriptId === undefined) {
+  if (scriptId === undefined || scriptId.length === 0) {
     state.completeness.exclude("scripts", "invalid_protocol_value");
     return;
   }
@@ -403,6 +403,18 @@ export const handleResponseReceived = (
     ...current,
     status: numberValue(response.status) ?? null,
     mime_type: cdpStringValue(response.mimeType) ?? null,
+    response_source: {
+      service_worker:
+        typeof response.fromServiceWorker === "boolean"
+          ? response.fromServiceWorker
+          : null,
+      disk_cache:
+        typeof response.fromDiskCache === "boolean"
+          ? response.fromDiskCache
+          : null,
+      service_worker_response_source:
+        cdpStringValue(response.serviceWorkerResponseSource) ?? null,
+    },
   });
   const metadata = safeResponseMetadata(
     requestId,
