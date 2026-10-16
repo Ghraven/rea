@@ -41,17 +41,9 @@ export const captureBrowserScenario = async (
       partial.kind === "browser-scenario-observation"
     ) {
       const report = browserScenarioCaptureSchema.safeParse(partial.capture);
-      if (!report.success) {
-        if (captured.error instanceof AnalysisCancelledError)
-          return err(
-            new AnalysisOutputError(
-              OPERATION,
-              "Browser scenario provider retained a malformed completed capture.",
-              { cause: report.error },
-            ),
-          );
-        return captured;
-      }
+      // Interrupted observations may omit steps or completeness. They are
+      // not completed captures and must retain their original failure.
+      if (!report.success) return captured;
       captured.error.partialObservation = createBrowserScenarioEvidence(
         scenario,
         report.data,
