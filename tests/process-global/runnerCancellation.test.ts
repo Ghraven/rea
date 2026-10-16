@@ -156,15 +156,25 @@ it.runIf(process.platform === "win32")(
   "resolves bare node and Windows command shims without losing arguments",
   async () => {
     const directory = await createTestTempDirectory("rea-runner-shims-");
-    const payload = 'argument with spaces and "quotes" & ^ % !';
-    const code = "process.stdout.write(JSON.stringify(process.argv.slice(1)))";
-    expect(
-      await execute(directory, "node", ["-e", code, payload]),
-    ).toMatchObject({
-      code: 0,
-      stdout: JSON.stringify([payload]),
-      stderr: "",
-    });
+    const entry = join(directory, "capture %PATH% & !NAME! 中文.mjs");
+    const payload = [
+      'argument with spaces and "quotes" & ^ % !',
+      "C:\\Users\\Jane Doe\\node runtime",
+      "E:\\便携包 & archive\\",
+      "%PATH% ^ (literal) !",
+    ];
+    await writeFile(
+      entry,
+      "process.stdout.write(JSON.stringify(process.argv.slice(2)))",
+      "utf8",
+    );
+    expect(await execute(directory, "node", [entry, ...payload])).toMatchObject(
+      {
+        code: 0,
+        stdout: JSON.stringify(payload),
+        stderr: "",
+      },
+    );
 
     const npm = await execute(directory, "npm", ["--version"]);
     expect(npm).toMatchObject({ code: 0, stderr: "" });
@@ -362,12 +372,14 @@ function launchSupervisor(directory: string) {
     if (stdout.includes("ready")) notifyReady?.();
   });
   stderrStream.on("data", (chunk) => (stderr += chunk.toString()));
-  const closed = withTimeout(
+  // Assert process termination; Windows IPC disconnect can delay pipe closure.
+  // The callers separately prove command death and reacquire the SQLite lock.
+  const exited = withTimeout(
     new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
-      (resolveClosed, reject) => {
+      (resolveExited, reject) => {
         supervisor.once("error", reject);
-        supervisor.once("close", (code, signal) =>
-          resolveClosed({ code, signal }),
+        supervisor.once("exit", (code, signal) =>
+          resolveExited({ code, signal }),
         );
       },
     ),
@@ -380,9 +392,9 @@ function launchSupervisor(directory: string) {
     if (pid > 0) stopIfPresent(pid);
     if (supervisor.exitCode === null && supervisor.signalCode === null)
       supervisor.kill("SIGKILL");
-    await closed.catch(() => undefined);
+    await exited.catch(() => undefined);
   };
-  return { supervisor, ready, closed, commandPid, stop, stderr: () => stderr };
+  return { supervisor, ready, exited, commandPid, stop, stderr: () => stderr };
 }
 
 it.runIf(process.platform === "win32")(
@@ -396,10 +408,13 @@ it.runIf(process.platform === "win32")(
       expect(pid).toBeGreaterThan(0);
       expect(isAlive(pid)).toBe(true);
       runner.supervisor.send("SIGTERM");
-      expect(await runner.closed).toEqual({ code: 143, signal: null });
+      expect(await runner.exited).toEqual({ code: 143, signal: null });
       expect(isAlive(pid)).toBe(false);
       expect(
-        await execute(directory, 'process.stdout.write("lock released");'),
+        await execute(directory, process.execPath, [
+          "-e",
+          'process.stdout.write("lock released");',
+        ]),
       ).toMatchObject({ code: 0, stdout: "lock released" });
     } finally {
       await runner.stop();
@@ -418,10 +433,13 @@ it.runIf(process.platform === "win32")(
       expect(pid).toBeGreaterThan(0);
       expect(isAlive(pid)).toBe(true);
       runner.supervisor.disconnect();
-      expect(await runner.closed).toEqual({ code: 143, signal: null });
+      expect(await runner.exited).toEqual({ code: 143, signal: null });
       expect(isAlive(pid)).toBe(false);
       expect(
-        await execute(directory, 'process.stdout.write("lock released");'),
+        await execute(directory, process.execPath, [
+          "-e",
+          'process.stdout.write("lock released");',
+        ]),
       ).toMatchObject({ code: 0, stdout: "lock released" });
     } finally {
       await runner.stop();
