@@ -82,6 +82,29 @@ it("bounds shared partial callback alias expansion by AST size", () => {
   expect(large.referenceReads).toBeLessThan(3 * small.referenceReads);
 });
 
+it("bounds reassignment meshes by write pairs when reads select every write", () => {
+  const measure = (writes: number) => {
+    const context = indexed(`function f(){} function g(){} let a = f, b = g;
+      function run(){ ${Array.from({ length: writes }, (_, i) => (i % 2 === 0 ? "a=b;" : "b=a;")).join("")} a(); }`);
+    const run = context.state.program.body.at(-1);
+    if (!t.isFunctionDeclaration(run)) throw new Error("Missing run");
+    const last = run.body.body.at(-1);
+    if (!t.isExpressionStatement(last) || !t.isCallExpression(last.expression))
+      throw new Error("Missing call");
+    const reads = vi.spyOn(context.bindingCache, "get");
+    const result = context.resolve(last.expression.callee);
+    expect(result).toMatchObject({ complete: false, cycleDependent: true });
+    expect(
+      result.callableIds.map((id) => context.callableById.get(id)?.name).sort(),
+    ).toEqual(["f", "g"]);
+    return reads.mock.calls.length;
+  };
+  const small = measure(6);
+  const large = measure(10);
+  expect(small).toBeGreaterThan(0);
+  expect(large).toBeLessThan(3 * small);
+});
+
 it.each([
   ["if(flag){cb=fallback;cb();}", true],
   ["if(flag)cb=fallback;cb();", false],
