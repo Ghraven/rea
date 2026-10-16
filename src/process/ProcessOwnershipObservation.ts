@@ -8,7 +8,10 @@ import {
   createDarwinProcessRunTokenReader,
   type DarwinProcessReaderCompiler,
 } from "./DarwinProcessRunTokenReader.js";
-import { readProcessRunTokens } from "./ProcessRunTokenObservations.js";
+import {
+  classifyProcessRunToken,
+  readProcessRunTokens,
+} from "./ProcessRunTokenObservations.js";
 import type {
   OwnedProcessGroup,
   ProcessGroupObservation,
@@ -68,21 +71,20 @@ export const observeOwnedProcessGroups = async (
     signal,
   )) {
     if (!pendingGroups.has(member.processGroupId)) continue;
-    if (observation.state === "readable") {
-      if (observation.runId !== runId) {
-        observations.set(member.processGroupId, {
-          state: "unverifiable",
-          reason: "process ownership did not match",
-        });
-        pendingGroups.delete(member.processGroupId);
-      }
-    } else {
+    const validation = classifyProcessRunToken(observation, runId);
+    if (validation.state === "foreign") {
+      observations.set(member.processGroupId, {
+        state: "unverifiable",
+        reason: "process ownership did not match",
+      });
+      pendingGroups.delete(member.processGroupId);
+    } else if (validation.state === "unavailable") {
       const gone = await processIsGone(host, member.pid);
       signal?.throwIfAborted();
       if (!gone) {
         observations.set(member.processGroupId, {
           state: "unverifiable",
-          reason: `process ownership could not be revalidated for PID ${member.pid}: ${observation.reason}`,
+          reason: `process ownership could not be revalidated for PID ${member.pid}: ${validation.reason}`,
         });
         pendingGroups.delete(member.processGroupId);
       }
@@ -125,12 +127,13 @@ export const observeOwnedProcessLineage = async (
     host,
     [launcher, ...descendants],
   )) {
-    if (observation.state === "readable") {
-      if (observation.runId !== ownership.runId)
-        return unavailableLineage(
-          ownership,
-          "process lineage contains an unowned or PID-reused process",
-        );
+    const validation = classifyProcessRunToken(observation, ownership.runId);
+    if (validation.state === "foreign")
+      return unavailableLineage(
+        ownership,
+        "process lineage contains an unowned or PID-reused process",
+      );
+    if (validation.state === "owned") {
       if (member.pid !== launcher.pid) verifiedDescendants.push(member);
     } else {
       if (await processIsGone(host, member.pid)) {
@@ -143,7 +146,7 @@ export const observeOwnedProcessLineage = async (
       }
       return unavailableLineage(
         ownership,
-        `process ownership could not be revalidated for PID ${member.pid}: ${observation.reason}`,
+        `process ownership could not be revalidated for PID ${member.pid}: ${validation.reason}`,
       );
     }
   }

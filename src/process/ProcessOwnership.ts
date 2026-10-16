@@ -7,7 +7,10 @@ import {
 } from "./ProcessOwnershipObservation.js";
 import { launcherIdentityFailure } from "./ProcessOwnershipIdentity.js";
 import { descendantsOf, liveProcesses } from "./ProcessOwnershipProcessTree.js";
-import { readProcessRunTokens } from "./ProcessRunTokenObservations.js";
+import {
+  classifyProcessRunToken,
+  readProcessRunTokens,
+} from "./ProcessRunTokenObservations.js";
 import { compareUnicodeCodePoints } from "../domain/unicodeCodePointOrder.js";
 
 const execFileAsync = promisify(execFile);
@@ -259,7 +262,7 @@ export const cleanupOwnedProcessGroup = async (
       processGroupId,
       ownership,
       host,
-      plan.tokenOwnedIdentities,
+      plan,
     );
     if ("cleaned" in revalidation) {
       if (!revalidation.cleaned)
@@ -353,6 +356,8 @@ const readLiveProcessTable = async (
 
 interface OwnedCleanupPlan {
   readonly signalOrder: readonly number[];
+  readonly processGroupIds: ReadonlySet<number>;
+  readonly observedProcesses: readonly ProcessTableEntry[];
   readonly tokenOwnedIdentities: ReadonlyMap<number, string | null>;
   readonly unresolved: readonly ProcessOwnershipValidationFailure[];
   readonly unverified: readonly OwnershipSweepUnverifiedProcess[];
@@ -453,6 +458,8 @@ const createOwnedCleanupPlan = async (
     return tokenOwned.failures.length > 0
       ? {
           signalOrder: [],
+          processGroupIds: new Set(),
+          observedProcesses: processes,
           tokenOwnedIdentities: tokenOwned.identities,
           unresolved: tokenOwned.failures,
           unverified: tokenOwned.unverified,
@@ -477,7 +484,7 @@ const createOwnedCleanupPlan = async (
   for (const processGroupId of sampledProcessGroupIds)
     processGroupIds.add(processGroupId);
   const signalableGroups = new Set<number>();
-  const unresolved = [...tokenOwned.failures];
+  let unresolved = [...tokenOwned.failures];
   const unverifiableSampledGroups = new Set<number>();
   for (const processGroupId of processGroupIds) {
     if (processGroupId === ownership.processGroupId) continue;
@@ -497,7 +504,8 @@ const createOwnedCleanupPlan = async (
       };
     if (
       (groupLeader === undefined || !descendantPids.has(groupLeader.pid)) &&
-      !tokenOwnedGroupIds.has(processGroupId)
+      !tokenOwnedGroupIds.has(processGroupId) &&
+      ownership.sweepTokenOwnedProcesses !== true
     )
       unverifiableSampledGroups.add(processGroupId);
   }
@@ -510,29 +518,65 @@ const createOwnedCleanupPlan = async (
         observedGroupId === processGroupId,
     );
     if (members.length === 0) continue;
-    const failures = await processOwnershipFailures(
+    const validation = await validateProcessGroupMembers(
+      processGroupId,
       members,
       ownership.runId,
       host,
       tokenOwned.identities,
     );
+    const { failures, members: validatedMembers } = validation;
+    const refreshedFailure = await refreshedSweepFailure(
+      validation.refreshedProcesses,
+      ownership,
+      processes,
+      processGroupIds,
+      host,
+    );
+    if (refreshedFailure !== undefined)
+      return withUnverifiedObservations(
+        refreshedFailure,
+        tokenOwned.unverified,
+      );
+    const checkedPids = new Set(members.map(({ pid }) => pid));
+    const refreshedLivePids =
+      validation.refreshedProcesses === undefined
+        ? undefined
+        : new Set(validation.refreshedProcesses.map(({ pid }) => pid));
+    // Later validation replaces a sweep diagnosis only with fresh ownership
+    // proof or confirmed exit. Missing start identity cannot be repaired by
+    // seeing the expected token on a potentially reused PID.
+    unresolved = unresolved.filter((failure) => {
+      if (
+        !checkedPids.has(failure.pid) ||
+        failures.some(({ pid }) => pid === failure.pid)
+      )
+        return true;
+      if (
+        refreshedLivePids !== undefined &&
+        !refreshedLivePids.has(failure.pid)
+      )
+        return false;
+      return (
+        failure.reason === "process-identity-unavailable" &&
+        !tokenOwned.identities.has(failure.pid)
+      );
+    });
     if (failures.length === 0 && unverifiableSampledGroups.has(processGroupId))
       unresolved.push(
-        ...members.map(({ pid }) => ({
+        ...validatedMembers.map(({ pid }) => ({
           pid,
           reason: "process-identity-unavailable" as const,
           diagnostic:
             "sampled process-group leader identity could not be verified",
         })),
       );
-    const scanFailures = tokenOwned.failures.filter(({ pid }) =>
-      members.some((member) => member.pid === pid),
-    );
     for (const failure of failures)
       mergeProcessOwnershipFailure(unresolved, failure);
     if (
       failures.length === 0 &&
-      scanFailures.length === 0 &&
+      !unresolved.some(({ pid }) => checkedPids.has(pid)) &&
+      validatedMembers.length > 0 &&
       !unverifiableSampledGroups.has(processGroupId)
     )
       signalableGroups.add(processGroupId);
@@ -540,6 +584,8 @@ const createOwnedCleanupPlan = async (
   if (ownership.sweepTokenOwnedProcesses !== true && unresolved.length > 0)
     return cleanupValidationFailure(unresolved, tokenOwned.unverified);
   return {
+    processGroupIds,
+    observedProcesses: processes,
     signalOrder: [...signalableGroups]
       .filter((groupId) => processGroupIds.has(groupId))
       .sort((left, right) =>
@@ -589,7 +635,7 @@ const revalidateOwnedProcessGroup = async (
   processGroupId: number,
   ownership: OwnedProcessGroup,
   host: ProcessOwnershipHost,
-  expectedIdentities: ReadonlyMap<number, string | null>,
+  plan: OwnedCleanupPlan,
 ): Promise<{ readonly empty: boolean } | ProcessCleanupResult> => {
   let members: readonly ProcessTableEntry[];
   try {
@@ -599,6 +645,14 @@ const revalidateOwnedProcessGroup = async (
       host,
     );
     if ("cleaned" in processes) return processes;
+    const refreshedFailure = await refreshedSweepFailure(
+      processes,
+      ownership,
+      plan.observedProcesses,
+      plan.processGroupIds,
+      host,
+    );
+    if (refreshedFailure !== undefined) return refreshedFailure;
     members = processes.filter(
       ({ processGroupId: observedGroupId }) =>
         observedGroupId === processGroupId,
@@ -609,13 +663,24 @@ const revalidateOwnedProcessGroup = async (
       reason: `process ownership could not be revalidated: ${errorMessage(cause)}`,
     };
   }
-  const failures = await processOwnershipFailures(
+  const validation = await validateProcessGroupMembers(
+    processGroupId,
     members,
     ownership.runId,
     host,
-    expectedIdentities,
+    plan.tokenOwnedIdentities,
   );
-  if (failures.length > 0) return cleanupValidationFailure(failures);
+  const refreshedFailure = await refreshedSweepFailure(
+    validation.refreshedProcesses,
+    ownership,
+    plan.observedProcesses,
+    plan.processGroupIds,
+    host,
+  );
+  if (refreshedFailure !== undefined) return refreshedFailure;
+  if (validation.failures.length > 0)
+    return cleanupValidationFailure(validation.failures);
+  members = validation.members;
   if (
     processGroupId !== ownership.processGroupId &&
     members.length > 0 &&
@@ -633,7 +698,7 @@ const revalidateOwnedProcessGroup = async (
 const cleanupValidationFailure = (
   failures: readonly ProcessOwnershipValidationFailure[],
   unverified: readonly OwnershipSweepUnverifiedProcess[] = [],
-): ProcessCleanupResult => {
+): ProcessCleanupFailure => {
   const unverifiedEntry = unverified.length === 0 ? {} : { unverified };
   const unreadable = failures.filter(
     ({ reason }) => reason === "environment-unreadable",
@@ -692,6 +757,7 @@ const cleanupValidationFailure = (
 };
 
 const sanitizedTokenReadFailure = (diagnostic: string | undefined): string => {
+  if (diagnostic === "run_token_missing") return diagnostic;
   if (diagnostic === "environment_unavailable") return diagnostic;
   if (diagnostic === "platform_binary_environment_withheld") return diagnostic;
   if (diagnostic === "restricted_process_environment_withheld")
@@ -721,13 +787,126 @@ const sanitizedTokenReadFailure = (diagnostic: string | undefined): string => {
   return "other_unavailable";
 };
 
-const processOwnershipFailures = async (
+interface ProcessOwnershipValidation {
+  readonly failures: readonly ProcessOwnershipValidationFailure[];
+  readonly members: readonly ProcessTableEntry[];
+  readonly refreshedProcesses?: readonly ProcessTableEntry[];
+}
+
+/** A fresh table may reveal another group after the bounded plan was built. */
+const refreshedSweepFailure = async (
+  refreshed: readonly ProcessTableEntry[] | undefined,
+  ownership: OwnedProcessGroup,
+  observed: readonly ProcessTableEntry[],
+  plannedGroups: ReadonlySet<number>,
+  host: ProcessOwnershipHost,
+): Promise<ProcessCleanupFailure | undefined> => {
+  if (refreshed === undefined || ownership.sweepTokenOwnedProcesses !== true)
+    return undefined;
+  const previousGroups = new Map(
+    observed.map(({ pid, processGroupId }) => [pid, processGroupId]),
+  );
+  const newCandidates = new Set(
+    refreshed
+      .filter(
+        ({ pid, processGroupId }) =>
+          !plannedGroups.has(processGroupId) &&
+          previousGroups.get(pid) !== processGroupId,
+      )
+      .map(({ pid }) => pid),
+  );
+  if (newCandidates.size === 0) return undefined;
+  const scan = await scanTokenOwnedProcesses(
+    refreshed,
+    ownership.runId,
+    host,
+    ownership.captureBaseline,
+    ownership,
+  );
+  const failures = scan.failures.filter(({ pid }) => newCandidates.has(pid));
+  for (const process of scan.owned) {
+    if (plannedGroups.has(process.processGroupId)) continue;
+    mergeProcessOwnershipFailure(failures, {
+      pid: process.pid,
+      reason: "process-identity-unavailable",
+      diagnostic:
+        "token-owned process group appeared after cleanup planning; retry cleanup with a fresh plan",
+    });
+  }
+  return failures.length === 0
+    ? undefined
+    : cleanupValidationFailure(failures, scan.unverified);
+};
+
+/** Membership belongs to the fresh process table, not the earlier PID array. */
+const validateProcessGroupMembers = async (
+  processGroupId: number,
+  initialMembers: readonly ProcessTableEntry[],
+  runId: string,
+  host: ProcessOwnershipHost,
+  expectedIdentities: ReadonlyMap<number, string | null>,
+): Promise<ProcessOwnershipValidation> => {
+  let members = initialMembers;
+  let refreshedProcesses: readonly ProcessTableEntry[] | undefined;
+  for (let attempt = 0; attempt < TOKEN_READ_RETRY_ATTEMPTS; attempt++) {
+    const validation = await validateProcessOwnership(
+      members,
+      runId,
+      host,
+      expectedIdentities,
+    );
+    refreshedProcesses = validation.refreshedProcesses ?? refreshedProcesses;
+    if (
+      validation.failures.length > 0 ||
+      validation.refreshedProcesses === undefined
+    )
+      return {
+        ...validation,
+        ...(refreshedProcesses === undefined ? {} : { refreshedProcesses }),
+      };
+    const refreshedMembers = validation.refreshedProcesses.filter(
+      (entry) => entry.processGroupId === processGroupId,
+    );
+    const validatedPids = new Set(validation.members.map(({ pid }) => pid));
+    if (refreshedMembers.every(({ pid }) => validatedPids.has(pid)))
+      return {
+        failures: [],
+        members: refreshedMembers,
+        refreshedProcesses: validation.refreshedProcesses,
+      };
+    members = refreshedMembers;
+  }
+  return {
+    members,
+    ...(refreshedProcesses === undefined ? {} : { refreshedProcesses }),
+    failures: members.map(({ pid }) => ({
+      pid,
+      reason: "process-identity-unavailable",
+      diagnostic:
+        "process-group membership kept changing during ownership validation",
+    })),
+  };
+};
+
+const validateProcessOwnership = async (
   members: readonly ProcessTableEntry[],
   runId: string,
   host: ProcessOwnershipHost,
   expectedIdentities: ReadonlyMap<number, string | null> = new Map(),
-): Promise<readonly ProcessOwnershipValidationFailure[]> => {
+): Promise<ProcessOwnershipValidation> => {
   const failures: ProcessOwnershipValidationFailure[] = [];
+  let validatedMembers = members;
+  let refreshedProcesses: readonly ProcessTableEntry[] | undefined;
+  const retainRecheck = (recheck: ProcessOwnershipRecheck): void => {
+    failures.push(...recheck.failures);
+    if (recheck.processes !== undefined) {
+      refreshedProcesses = recheck.processes;
+      const livePids = new Set(refreshedProcesses.map(({ pid }) => pid));
+      validatedMembers = validatedMembers.filter(({ pid }) =>
+        livePids.has(pid),
+      );
+    }
+  };
   if (expectedIdentities.size > 0 && host.processIdentities !== undefined) {
     const expectedMembers = members.filter(({ pid }) =>
       expectedIdentities.has(pid),
@@ -750,15 +929,15 @@ const processOwnershipFailures = async (
         });
       }
     }
-    failures.push(...(await recheckOwnershipFailures(identityFailures, host)));
+    retainRecheck(await recheckOwnershipFailures(identityFailures, host));
   }
-  failures.push(...(await processRunTokenFailures(members, runId, host)));
+  retainRecheck(await processRunTokenFailures(validatedMembers, runId, host));
   if (
     failures.length === 0 &&
     expectedIdentities.size > 0 &&
     host.processIdentities !== undefined
   ) {
-    const expectedMembers = members.filter(({ pid }) =>
+    const expectedMembers = validatedMembers.filter(({ pid }) =>
       expectedIdentities.has(pid),
     );
     const observed = await host.processIdentities(expectedMembers);
@@ -779,30 +958,40 @@ const processOwnershipFailures = async (
           "process identity changed or became unavailable during token validation",
       });
     }
-    failures.push(...(await recheckOwnershipFailures(identityFailures, host)));
+    retainRecheck(await recheckOwnershipFailures(identityFailures, host));
   }
-  return failures;
+  return {
+    failures,
+    members: validatedMembers,
+    ...(refreshedProcesses === undefined ? {} : { refreshedProcesses }),
+  };
 };
+
+interface ProcessOwnershipRecheck {
+  readonly failures: readonly ProcessOwnershipValidationFailure[];
+  readonly processes?: readonly ProcessTableEntry[];
+}
 
 const processRunTokenFailures = async (
   members: readonly ProcessTableEntry[],
   runId: string,
   host: ProcessOwnershipHost,
-): Promise<readonly ProcessOwnershipValidationFailure[]> => {
+): Promise<ProcessOwnershipRecheck> => {
   const failures: ProcessOwnershipValidationFailure[] = [];
   for await (const { process: member, observation } of readProcessRunTokens(
     host,
     members,
   )) {
-    if (observation.state === "readable") {
-      if (observation.runId !== runId)
-        failures.push({ pid: member.pid, reason: "run-token-mismatch" });
+    const validation = classifyProcessRunToken(observation, runId);
+    if (validation.state === "owned") continue;
+    if (validation.state === "foreign") {
+      failures.push({ pid: member.pid, reason: "run-token-mismatch" });
       continue;
     }
     failures.push({
       pid: member.pid,
       reason: "environment-unreadable",
-      diagnostic: observation.reason,
+      diagnostic: validation.reason,
     });
   }
   return recheckOwnershipFailures(failures, host);
@@ -810,15 +999,16 @@ const processRunTokenFailures = async (
 
 /**
  * Take a fresh liveness snapshot after each ownership-read phase. Only an
- * absent PID resolves an unreadable observation; a readable token mismatch
- * remains a failure. Never reuse this snapshot across identity/token reads.
+ * absent or zombie PID resolves an unavailable observation; an explicitly
+ * foreign token remains a failure. Retain confirmed exits for signaling
+ * consumers. Never reuse this snapshot across identity/token reads.
  */
 const recheckOwnershipFailures = async (
   failures: readonly ProcessOwnershipValidationFailure[],
   host: ProcessOwnershipHost,
-): Promise<readonly ProcessOwnershipValidationFailure[]> => {
+): Promise<ProcessOwnershipRecheck> => {
   if (!failures.some(({ reason }) => reason !== "run-token-mismatch"))
-    return failures;
+    return { failures };
   try {
     let processes = await host.listProcesses();
     const isDarwin = (host.platform ?? process.platform) === "darwin";
@@ -840,19 +1030,25 @@ const recheckOwnershipFailures = async (
       );
       processes = await host.listProcesses();
     }
-    const live = new Set(liveProcesses(processes).map(({ pid }) => pid));
-    return failures.filter(
-      ({ pid, reason }) => reason === "run-token-mismatch" || live.has(pid),
-    );
+    const liveEntries = liveProcesses(processes);
+    const live = new Set(liveEntries.map(({ pid }) => pid));
+    return {
+      failures: failures.filter(
+        ({ pid, reason }) => reason === "run-token-mismatch" || live.has(pid),
+      ),
+      processes: liveEntries,
+    };
   } catch (cause: unknown) {
-    return failures.map((failure) =>
-      failure.reason === "run-token-mismatch"
-        ? failure
-        : {
-            ...failure,
-            diagnostic: `${failure.diagnostic}; process liveness recheck failed: ${errorMessage(cause)}`,
-          },
-    );
+    return {
+      failures: failures.map((failure) =>
+        failure.reason === "run-token-mismatch"
+          ? failure
+          : {
+              ...failure,
+              diagnostic: `${failure.diagnostic}; process liveness recheck failed: ${errorMessage(cause)}`,
+            },
+      ),
+    };
   }
 };
 
@@ -934,6 +1130,14 @@ const scanTokenOwnedProcesses = async (
     }
   }
   const failures: ProcessOwnershipValidationFailure[] = [];
+  // Keep start identity separate from token proof, including candidates whose
+  // missing token may recover during later group validation.
+  const scanIdentities = new Map<number, string | null>(
+    candidates.map(({ pid }) => {
+      const identity = candidateIdentities.get(pid);
+      return [pid, identity?.state === "readable" ? identity.identity : null];
+    }),
+  );
   if (captureBaseline !== undefined && host.processIdentities !== undefined) {
     const stableCandidates: ProcessTableEntry[] = [];
     const identityFailures: ProcessOwnershipValidationFailure[] = [];
@@ -948,27 +1152,24 @@ const scanTokenOwnedProcesses = async (
         diagnostic: "process identity was unavailable during token scan",
       });
     }
-    failures.push(...(await recheckOwnershipFailures(identityFailures, host)));
+    failures.push(
+      ...(await recheckOwnershipFailures(identityFailures, host)).failures,
+    );
     candidates = stableCandidates;
   }
   const owned: ProcessTableEntry[] = [];
-  const ownedIdentities = new Map<number, string | null>();
   const recordOwned = (process: ProcessTableEntry): void => {
     owned.push(process);
-    const identity = candidateIdentities.get(process.pid);
-    ownedIdentities.set(
-      process.pid,
-      identity?.state === "readable" ? identity.identity : null,
-    );
   };
   const unreadable: UnreadableTokenCandidate[] = [];
   for await (const { process, observation } of readProcessRunTokens(
     host,
     candidates,
   )) {
-    if (observation.state === "readable") {
-      if (observation.runId === runId) recordOwned(process);
-    } else unreadable.push({ process, diagnostic: observation.reason });
+    const validation = classifyProcessRunToken(observation, runId);
+    if (validation.state === "owned") recordOwned(process);
+    else if (validation.state === "unavailable")
+      unreadable.push({ process, diagnostic: validation.reason });
   }
   const remaining = await settleUnreadableTokenCandidates(
     unreadable,
@@ -1054,15 +1255,18 @@ const scanTokenOwnedProcesses = async (
           "process identity changed or became unavailable during token validation",
       });
     }
-    failures.push(...(await recheckOwnershipFailures(identityFailures, host)));
+    for (const failure of (
+      await recheckOwnershipFailures(identityFailures, host)
+    ).failures)
+      mergeProcessOwnershipFailure(failures, failure);
     return {
       owned: stillOwned,
       failures,
       unverified,
-      identities: ownedIdentities,
+      identities: scanIdentities,
     };
   }
-  return { owned, failures, unverified, identities: ownedIdentities };
+  return { owned, failures, unverified, identities: scanIdentities };
 };
 
 /**
@@ -1103,14 +1307,10 @@ const settleUnreadableTokenCandidates = async (
       host,
       candidates,
     )) {
-      if (observation.state === "readable") {
-        if (observation.runId === runId) recordOwned(process);
-        continue;
-      }
-      stillUnreadable.push({
-        process,
-        diagnostic: observation.reason,
-      });
+      const validation = classifyProcessRunToken(observation, runId);
+      if (validation.state === "owned") recordOwned(process);
+      else if (validation.state === "unavailable")
+        stillUnreadable.push({ process, diagnostic: validation.reason });
     }
     remaining = stillUnreadable;
   }

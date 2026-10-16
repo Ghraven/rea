@@ -19,6 +19,8 @@ import { createEvidence } from "../../../src/domain/evidence.js";
 import { ProcessCaptureError } from "../../../src/process/capture/ProcessCaptureError.js";
 import { PROCESS_PROVIDER } from "../../../src/domain/process/processEvidenceProvider.js";
 import { INVESTIGATION_EXAMPLES } from "../../../src/contracts/investigationExamples.js";
+import { partialProcessCaptureObservationSchema } from "../../../src/domain/process/processCapture.js";
+import { expectSerializedUnverifiedHostCleanup } from "../../support/hostCleanup.js";
 
 const execFileAsync = promisify(execFile);
 const CLI_INTEGRATION_TIMEOUT_MS = 60_000;
@@ -54,21 +56,54 @@ describe("documented process CLI workflow", () => {
         arguments: ["capture-process", ...args],
         cwd: root,
       });
-      expect(capture.exitCode, capture.stdout || capture.stderr).toBe(0);
-      expect(capture.json).toMatchObject({
-        operation: "capture_process_scenario",
-      });
+      if (capture.exitCode === 0)
+        expect(capture.json).toMatchObject({
+          operation: "capture_process_scenario",
+        });
+      else {
+        expect(capture.exitCode, capture.stdout || capture.stderr).toBe(1);
+        const partial = partialProcessCaptureObservationSchema.parse(
+          expectSerializedUnverifiedHostCleanup({ error: capture.json }),
+        );
+        expect(partial.execution_failure).toBeNull();
+        if (!("capture" in partial))
+          throw new Error(
+            "Unverified host cleanup omitted the completed capture",
+          );
+        expect(partial.capture.exit).toMatchObject({
+          code: 0,
+          reason: "exited",
+        });
+        expect(partial.capture.frames.map(({ data }) => data).join("")).toBe(
+          "documented-capture",
+        );
+        expect(partial.capture.settlement.cleanup_outcome).toBe("failed");
+      }
       await writeFile(join(root, output), capture.stdout);
       const comparison = await cli.run({
         arguments: ["compare-process-captures", output, output, "--json"],
         cwd: root,
       });
-      expect(comparison.exitCode, comparison.stdout || comparison.stderr).toBe(
-        0,
-      );
-      expect(comparison.json).toMatchObject({
-        operation: "compare_process_captures",
-      });
+      // Error-shaped output remains an error: do not relabel partial captures
+      // as successful Evidence merely to exercise the comparison recipe.
+      if (capture.exitCode === 0) {
+        expect(
+          comparison.exitCode,
+          comparison.stdout || comparison.stderr,
+        ).toBe(0);
+        expect(comparison.json).toMatchObject({
+          operation: "compare_process_captures",
+        });
+      } else {
+        expect(
+          comparison.exitCode,
+          comparison.stdout || comparison.stderr,
+        ).toBe(1);
+        expect(comparison.json).toMatchObject({
+          error: "Process command failed",
+          category: "invalid_input",
+        });
+      }
     },
     CLI_INTEGRATION_TIMEOUT_MS,
   );

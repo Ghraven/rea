@@ -441,6 +441,18 @@ and process residual unknowns. Successful cleanup verifies the owned group;
 it does not attribute those unrelated processes. Related or otherwise unexplained
 unreadable processes still prevent successful cleanup.
 
+A missing run token is reported as `run_token_missing`, rather than proof of a
+foreign run. Cleanup rechecks liveness after token reads: an absent or zombie
+process is settled and excluded from signaling. A live process with a missing
+token, or an unavailable liveness check, still blocks cleanup; an explicitly
+different token remains a mismatch.
+
+The refreshed process table also owns current group membership: newly discovered
+members must pass ownership validation before cleanup can report an empty group.
+Repeated membership churn retains uncertainty after bounded validation attempts.
+Token sweeps apply the same missing-token classification and bounded liveness
+settlement, while unchanged prelaunch start identities remain outside the scan.
+
 On macOS, changing a Node process's `process.title` can make its run token
 unreadable. Node documents that [setting the title overwrites argv memory](https://nodejs.org/download/release/v24.18.0/docs/api/process.html#processtitle).
 With the pinned toolchain, a live child retained a readable start identity
