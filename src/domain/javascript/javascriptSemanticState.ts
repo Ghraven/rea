@@ -27,6 +27,8 @@ import type {
 export interface JavaScriptSemanticInitializer {
   readonly node: t.Node;
   readonly projection: readonly (string | number | null)[];
+  /** Binding event in a declaration pattern, distinct from the RHS spelling. */
+  readonly bindingNode?: t.Node;
   readonly entryBody?: t.BlockStatement;
 }
 
@@ -64,6 +66,10 @@ export interface JavaScriptSemanticReferenceEffectsAtSite {
 }
 
 export interface JavaScriptSemanticRequiredModuleEffect extends JavaScriptSemanticMemberEffect {
+  readonly kind: "write" | "escape";
+}
+
+export interface JavaScriptSemanticLiteralMemberEffect extends JavaScriptSemanticMemberEffect {
   readonly kind: "write" | "escape";
 }
 
@@ -108,6 +114,8 @@ export interface JavaScriptSemanticAnalysisState {
   /** Getter query bounds encountered while resolving object and class properties. */
   readonly getterResourceLimits: Set<JavaScriptSemanticResourceLimit>;
   readonly parentsByNode: WeakMap<t.Node, t.Node>;
+  /** Await sites retained by the definitions pass for lazy promise-result indexing. */
+  readonly awaitSites: t.AwaitExpression[];
   readonly scopes: JavaScriptSemanticScopeState[];
   readonly scopesById: Map<string, JavaScriptSemanticScopeState>;
   /** Scope boundaries and descendant scopes resolved on demand. */
@@ -115,6 +123,13 @@ export interface JavaScriptSemanticAnalysisState {
   readonly bindingsById: Map<string, JavaScriptSemanticBindingState>;
   /** Resolved identifier writes retained at their exact source sites. */
   readonly bindingWrites: Map<string, t.Node[]>;
+  /** Allocation effects produced by the shared alias-aware mutation pass. */
+  literalMemberEffects?: WeakMap<
+    t.ObjectExpression | t.ArrayExpression,
+    JavaScriptSemanticLiteralMemberEffect[]
+  >;
+  /** Visible Array prototype effects make numeric pattern iteration unknown. */
+  arrayIterationUnknown?: boolean;
   /** Source evidence that Object.prototype may supply a `require` property. */
   prototypeRequireMutationObserved: boolean | undefined;
   /** Source evidence that Object.prototype may add inherited enumerable keys. */

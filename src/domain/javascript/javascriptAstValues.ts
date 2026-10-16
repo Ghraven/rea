@@ -1,5 +1,6 @@
 import * as t from "@babel/types";
 import type { JavaScriptSemanticPrimitive } from "./javascriptSemanticValueTypes.js";
+import { semanticArrayIndex } from "./javascriptSemanticPropertyPaths.js";
 
 /** TypeScript receiver annotations occupy no positional runtime parameter slot. */
 export const runtimeFunctionParameters = (
@@ -41,6 +42,36 @@ export const unwrapJavaScriptExpression = (
     depth += 1;
   }
   return { node: current, depth };
+};
+
+/** Result identity follows only one syntax-proven selected operand. */
+export const javaScriptExactResultOperand = (
+  node: t.Node,
+): t.Node | undefined => {
+  node = unwrapJavaScriptExpression(node).node;
+  if (t.isSequenceExpression(node)) return node.expressions.at(-1);
+  if (t.isConditionalExpression(node)) {
+    const test = readExactJavaScriptLiteral(node.test);
+    return test.found
+      ? test.value
+        ? node.consequent
+        : node.alternate
+      : undefined;
+  }
+  if (t.isLogicalExpression(node)) {
+    const left = readExactJavaScriptLiteral(node.left);
+    if (!left.found) return undefined;
+    const right =
+      node.operator === "??"
+        ? left.value === null || left.value === undefined
+        : node.operator === "&&"
+          ? Boolean(left.value)
+          : !left.value;
+    return right ? node.right : node.left;
+  }
+  return t.isAssignmentExpression(node) && node.operator === "="
+    ? node.right
+    : undefined;
 };
 
 /** Read one syntax-level primitive only when its value is exact. */
@@ -108,19 +139,62 @@ export const semanticStaticPropertyKey = (
 };
 
 /** Later properties own a key; an intervening dynamic write leaves it unknown. */
-export const semanticFinalObjectProperty = (
+export const semanticFinalObjectMember = (
   node: t.ObjectExpression,
   key: string,
-): t.Node | undefined => {
+): t.ObjectProperty | t.ObjectMethod | undefined => {
   for (let index = node.properties.length - 1; index >= 0; index -= 1) {
     const property = node.properties[index];
     if (property === undefined || t.isSpreadElement(property)) return undefined;
     const name = semanticStaticPropertyKey(property.key, property.computed);
     if (name === null) return undefined;
-    if (name === key)
-      return t.isObjectProperty(property) ? property.value : undefined;
+    if (name === key) return property;
   }
   return undefined;
+};
+
+/** Select a data value without substituting a getter or method for that value. */
+export const semanticFinalObjectProperty = (
+  node: t.ObjectExpression,
+  key: string,
+): t.Node | undefined => {
+  const property = semanticFinalObjectMember(node, key);
+  return t.isObjectProperty(property) ? property.value : undefined;
+};
+
+/** Preserve allocation identity through expressions with one exact result. */
+export const semanticLiteralContainer = (
+  rawNode: t.Node,
+): t.ObjectExpression | t.ArrayExpression | undefined => {
+  let node = unwrapJavaScriptExpression(rawNode).node;
+  for (;;) {
+    const result = javaScriptExactResultOperand(node);
+    if (result === undefined) break;
+    node = unwrapJavaScriptExpression(result).node;
+  }
+  return t.isObjectExpression(node) || t.isArrayExpression(node)
+    ? node
+    : undefined;
+};
+
+/** Project literal syntax; callers separately prove mutation and iteration. */
+export const semanticLiteralProperty = (
+  rawNode: t.Node,
+  key: string | number,
+): t.Node | undefined => {
+  const node = semanticLiteralContainer(rawNode);
+  // Numeric projections denote array-pattern iteration, not property lookup.
+  // Object patterns retain string keys, including a numeric property's spelling.
+  if (typeof key === "number" && !t.isArrayExpression(node)) return undefined;
+  if (t.isObjectExpression(node))
+    return semanticFinalObjectProperty(node, String(key));
+  if (!t.isArrayExpression(node)) return undefined;
+  const index = semanticArrayIndex(key);
+  if (index === null || index >= node.elements.length) return undefined;
+  // Earlier spreads make the selected position uncertain; later spreads do not.
+  if (node.elements.slice(0, index + 1).some((item) => t.isSpreadElement(item)))
+    return undefined;
+  return node.elements[index] ?? undefined;
 };
 
 export const semanticFinalObjectStringProperty = (
