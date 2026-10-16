@@ -522,15 +522,44 @@ const isKnownNetworkRequest = (
 };
 
 /** Finish queued targets after shared member-mutation facts are indexed. */
-export const finishPartialNetworkEndpoints = (
+/**
+ * Only a target with a stable earlier initializer can resolve, and that proof
+ * reads definition facts alone. Build the whole-source mutation index only when
+ * such a target needs its effects; every other request stays partial.
+ */
+export function* finishPartialNetworkEndpointsSteps(
   context: FindingContext,
   bindings: JavaScriptSemanticAnalysisState,
   index: JavaScriptBindingIndex,
-): void => {
-  for (const { node, name } of context.accumulator.pendingNetworkCalls) {
-    const target = argumentNode(node.arguments[0]);
-    if (target === undefined) continue;
-    const resolved = resolvedRequestTarget(target, node, bindings, index);
+): Generator<void, void> {
+  const pending = context.accumulator.pendingNetworkCalls.flatMap(
+    ({ node, name }) => {
+      const target = argumentNode(node.arguments[0]);
+      if (target === undefined) return [];
+      const capture = requestTargetCapture(target, node);
+      return [
+        {
+          node,
+          name,
+          target,
+          capture,
+          resolvable: requestInitializerPrecedesSite(
+            capture.reference,
+            capture.site,
+            bindings,
+            index,
+          ),
+        },
+      ];
+    },
+  );
+  context.accumulator.pendingNetworkCalls.length = 0;
+  if (pending.some(({ resolvable }) => resolvable))
+    yield* index.indexMemberMutationFactsSteps();
+  for (const { node, name, target, capture, resolvable } of pending) {
+    const resolved = resolvable
+      ? resolvedRequestTarget(target, capture, bindings, index)
+      : undefined;
     if (resolved !== undefined)
       addEndpoint(context, {
         node,
@@ -540,11 +569,10 @@ export const finishPartialNetworkEndpoints = (
       });
     else addPartialNetworkEndpoint(context, node, name, target);
   }
-  context.accumulator.pendingNetworkCalls.length = 0;
   context.accumulator.endpoints.sort(
     (left, right) => left.offset - right.offset,
   );
-};
+}
 
 const addPartialNetworkEndpoint = (
   context: FindingContext,
@@ -561,24 +589,34 @@ const addPartialNetworkEndpoint = (
     resolution: "partial",
   });
 
-const resolvedRequestTarget = (
+interface RequestTargetCapture {
+  readonly reference: t.Node;
+  readonly site: t.Node;
+}
+
+const requestTargetCapture = (
   node: t.Node,
   site: t.Node,
-  bindings: JavaScriptSemanticAnalysisState,
-  index: JavaScriptBindingIndex,
-): string | undefined => {
+): RequestTargetCapture => {
   const reference = requestReferenceNode(node);
   // A toString result is selected before the enclosing request invocation.
   const expression = unwrapJavaScriptExpression(node).node;
-  const capture = reference === expression ? site : expression;
-  if (referenceMayHaveChangedAtSite(reference, capture, index))
-    return undefined;
-  if (!requestInitializerPrecedesSite(reference, capture, bindings, index))
+  return { reference, site: reference === expression ? site : expression };
+};
+
+/** Resolve a target whose stable earlier initializer the caller has proved. */
+const resolvedRequestTarget = (
+  node: t.Node,
+  capture: RequestTargetCapture,
+  bindings: JavaScriptSemanticAnalysisState,
+  index: JavaScriptBindingIndex,
+): string | undefined => {
+  if (referenceMayHaveChangedAtSite(capture.reference, capture.site, index))
     return undefined;
   const evaluated = evaluateSemanticExpression(node, bindings);
   if (evaluated.status === "literal" && typeof evaluated.value === "string")
     return evaluated.value;
-  return urlObjectRequestTarget(node, capture, bindings, index);
+  return urlObjectRequestTarget(node, capture.site, bindings, index);
 };
 
 const requestInitializerPrecedesSite = (

@@ -1,6 +1,13 @@
+import * as t from "@babel/types";
 import { expect, it } from "vitest";
 
+import { createJavaScriptRpcScan } from "./javascriptRpcEndpoints.js";
+import { indexJavaScriptBindingsWithReceiversSteps } from "./javascriptSemanticAnalysis.js";
+import { completeSemanticSteps } from "./javascriptSemanticTraversal.js";
+import { parseJavaScriptSource } from "./javascriptSourceParser.js";
 import { analyzeJavaScriptStaticSource } from "./javascriptStaticAnalysis.js";
+import { finishPartialNetworkEndpointsSteps } from "./javascriptStaticAnalysisCalls.js";
+import { createJavaScriptAnalysisAccumulator } from "./javascriptStaticAnalysisState.js";
 
 const endpoints = (source: string) =>
   analyzeJavaScriptStaticSource(source).endpoints.map((endpoint) => ({
@@ -9,6 +16,51 @@ const endpoints = (source: string) =>
     mechanism: endpoint.mechanism,
     resolution: endpoint.resolution,
   }));
+
+/** Finish every `fetch` call in source order and count member-index builds. */
+const finishFetchCalls = (source: string) => {
+  const file = parseJavaScriptSource(source);
+  if (file === null) throw new TypeError("Fixture must parse");
+  const index = completeSemanticSteps(
+    indexJavaScriptBindingsWithReceiversSteps(file.program),
+  );
+  completeSemanticSteps(index.indexAmbientWritesSteps());
+  let memberIndexBuilds = 0;
+  const observed = {
+    ...index,
+    *indexMemberMutationFactsSteps() {
+      memberIndexBuilds += 1;
+      yield* index.indexMemberMutationFactsSteps();
+    },
+  };
+  const context = {
+    source,
+    accumulator: createJavaScriptAnalysisAccumulator(source.length),
+    vitePreloadDependencyTable: null,
+    rpcScan: createJavaScriptRpcScan(
+      source,
+      index.receivers.rpcClientRoots,
+      observed,
+    ),
+  };
+  t.traverseFast(file.program, (node) => {
+    if (
+      t.isCallExpression(node) &&
+      t.isIdentifier(node.callee, { name: "fetch" })
+    )
+      context.accumulator.pendingNetworkCalls.push({ node, name: "fetch" });
+  });
+  completeSemanticSteps(
+    finishPartialNetworkEndpointsSteps(context, index.bindings, observed),
+  );
+  return {
+    memberIndexBuilds,
+    endpoints: context.accumulator.endpoints.map(({ value }) => ({
+      value: value.value,
+      resolution: value.resolution,
+    })),
+  };
+};
 
 it("resolves unchanged lexical strings and object properties", () => {
   expect(
@@ -212,6 +264,67 @@ it("keeps an escaped URL object partial", () => {
     value: "socket",
     mechanism: "call:WebSocket",
     resolution: "partial",
+  });
+});
+
+it("checks member effects for stable targets beside parameter targets", () => {
+  expect(
+    endpoints(`
+        const load = (url) => fetch(url);
+        const target = "/items";
+        const socket = new URL("wss://old.example.test/socket");
+        configure(socket);
+        fetch(target);
+        fetch(socket);
+      `),
+  ).toEqual([
+    {
+      kind: "network",
+      value: "url",
+      mechanism: "call:fetch",
+      resolution: "partial",
+    },
+    {
+      kind: "network",
+      value: "/items",
+      mechanism: "call:fetch",
+      resolution: undefined,
+    },
+    {
+      kind: "network",
+      value: "socket",
+      mechanism: "call:fetch",
+      resolution: "partial",
+    },
+  ]);
+});
+
+it("builds member effects only when a pending target can resolve", () => {
+  expect(
+    finishFetchCalls(`
+        const load = (url) => fetch(url);
+        fetch(later);
+        const later = "/after";
+      `),
+  ).toEqual({
+    memberIndexBuilds: 0,
+    endpoints: [
+      { value: "url", resolution: "partial" },
+      { value: "later", resolution: "partial" },
+    ],
+  });
+  expect(
+    finishFetchCalls(`
+        const load = (url) => fetch(url);
+        const target = "/items";
+        fetch(target);
+      `),
+  ).toEqual({
+    memberIndexBuilds: 1,
+    endpoints: [
+      { value: "url", resolution: "partial" },
+      { value: "/items", resolution: undefined },
+    ],
   });
 });
 

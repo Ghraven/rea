@@ -21,7 +21,7 @@ import {
 import {
   addReference,
   addSourceMapDirectives,
-  finishPartialNetworkEndpoints,
+  finishPartialNetworkEndpointsSteps,
   inspectCall,
   inspectRouteProperty,
   inspectRoleProperty,
@@ -99,10 +99,8 @@ export function* analyzeParsedJavaScriptStaticSourceSteps(
     rpcScan: createJavaScriptRpcScan(source, receivers.rpcClientRoots, index),
   };
   yield* traverseStaticSourceSteps(file, findings, bindings);
-  if (accumulator.pendingNetworkCalls.length > 0) {
-    yield* index.indexMemberMutationFactsSteps();
-    finishPartialNetworkEndpoints(findings, bindings, index);
-  }
+  if (accumulator.pendingNetworkCalls.length > 0)
+    yield* finishPartialNetworkEndpointsSteps(findings, bindings, index);
   accumulator.electronCallPaths = collectElectronWrappedCallPaths(
     file.program,
     bindings,
