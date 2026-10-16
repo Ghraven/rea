@@ -84,15 +84,15 @@ export const decodeXmlText = (text: string): string =>
   );
 
 /**
- * Decode an XML plist whose dictionaries may use the legal key `__proto__`,
- * which the `plist` decoder rejects outright. Those entries are omitted and
- * counted so callers can report them instead of failing the whole document.
+ * Decode complete XML character-data keys before the pinned value decoder.
+ * Dictionaries may use the legal key `__proto__`, which REA omits and counts
+ * instead of failing the whole document or changing unrelated source values.
  */
 export const parseXmlPropertyList = (
   text: string,
 ): PropertyListWithoutPrototypeKeys => {
   // Preserve the pinned decoder's existing OpenStep autodetection, also used
-  // by app Info.plist resolution. Only XML needs the key-element substitution.
+  // by app Info.plist resolution. Only XML needs key normalization.
   const first = text.trimStart()[0];
   if (first === "{" || first === "(") {
     // The pinned decoder assigns a `__proto__` key to the object prototype, so
@@ -113,10 +113,7 @@ export const parseXmlPropertyList = (
   // same meaning at both boundaries, before plist's recursive value decode.
   const document = new DOMParser().parseFromString(normalized, "text/xml");
   assertXmlPlistDepthWithinLimit(document);
-  const { substituted, placeholder } = substitutePrototypeKeys(
-    normalized,
-    document,
-  );
+  const { substituted, placeholder } = normalizeXmlKeys(normalized, document);
   return withoutKey(parse(substituted), placeholder);
 };
 
@@ -321,17 +318,32 @@ const assertXmlPlistDepthWithinLimit = (document: Document): void => {
   }
 };
 
-/** Locate keys with the same XML parser and first-child semantics as plist. */
-const substitutePrototypeKeys = (text: string, document: Document) => {
-  const keys = Array.from(document.getElementsByTagName("key"));
-  const decodedKeys = new Set(keys.map((key) => key.firstChild?.nodeValue));
+/** Normalize key character data once; the pinned decoder reads only its first child. */
+const normalizeXmlKeys = (text: string, document: Document) => {
+  const keys = Array.from(document.getElementsByTagName("key")).map((key) => {
+    // Nested elements are not key character data. Preserve the pinned decoder's
+    // handling of unsupported markup instead of inferring a key from it.
+    const characterDataOnly = !Array.from(key.childNodes).some(
+      (child) => child.nodeType === child.ELEMENT_NODE,
+    );
+    return {
+      node: key.firstChild,
+      value: characterDataOnly ? key.textContent : key.firstChild?.nodeValue,
+      characterDataOnly,
+    };
+  });
+  const decodedKeys = new Set(keys.map(({ value }) => value));
   let placeholder = "__rea_prototype_key__";
   while (decodedKeys.has(placeholder)) placeholder = `_${placeholder}`;
 
-  const omitted = keys
-    .map((key) => key.firstChild)
-    .filter((node) => node?.nodeValue === PROTOTYPE_KEY);
-  if (omitted.length === 0) return { substituted: text, placeholder };
+  const replacements = keys.filter(
+    ({ node, value }) =>
+      node !== null &&
+      value !== null &&
+      value !== undefined &&
+      (value === PROTOTYPE_KEY || value !== node.nodeValue),
+  );
+  if (replacements.length === 0) return { substituted: text, placeholder };
 
   // xmldom uses one-based locators in document order. Scan forward only to
   // needed lines instead of retaining an offset for every source newline.
@@ -339,7 +351,7 @@ const substitutePrototypeKeys = (text: string, document: Document) => {
   let lineStart = 0;
   const parts: string[] = [];
   let cursor = 0;
-  for (const node of omitted) {
+  for (const { node, value, characterDataOnly } of replacements) {
     const nodeLine = node?.lineNumber;
     const column = node?.columnNumber;
     if (nodeLine === undefined || column === undefined)
@@ -352,9 +364,49 @@ const substitutePrototypeKeys = (text: string, document: Document) => {
       line += 1;
     }
     const offset = lineStart + column - 1;
-    parts.push(text.slice(cursor, offset), `<![CDATA[${placeholder}]]>`);
-    cursor = offset;
+    parts.push(
+      text.slice(cursor, offset),
+      characterDataOnly
+        ? encodeXmlKey(value === PROTOTYPE_KEY ? placeholder : (value ?? ""))
+        : `<![CDATA[${placeholder}]]>`,
+    );
+    // Unsupported markup retains the original prototype-key substitution;
+    // only character-data keys may have their contents normalized.
+    cursor = characterDataOnly ? xmlKeyContentEnd(text, offset) : offset;
   }
   parts.push(text.slice(cursor));
   return { substituted: parts.join(""), placeholder };
+};
+
+/** Escape only replacement keys; preserve encoded line endings through reparsing. */
+const encodeXmlKey = (value: string): string =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replace(
+      /[\r\u0085\u2028\u2029]/gu,
+      (character) => `&#${String(character.codePointAt(0))};`,
+    );
+
+/** Find the key's closing tag without treating opaque character data as markup. */
+const xmlKeyContentEnd = (text: string, offset: number): number => {
+  let cursor = offset;
+  while (cursor < text.length) {
+    const start = text.indexOf("<", cursor);
+    if (start === -1) break;
+    if (text.startsWith("</key", start)) return start;
+    const opaqueEnd = text.startsWith("<![CDATA[", start)
+      ? "]]>"
+      : text.startsWith("<!--", start)
+        ? "-->"
+        : text.startsWith("<?", start)
+          ? "?>"
+          : undefined;
+    if (opaqueEnd === undefined) break;
+    const end = text.indexOf(opaqueEnd, start + 2);
+    if (end === -1) break;
+    cursor = end + opaqueEnd.length;
+  }
+  throw new TypeError("XML plist key has invalid character-data boundaries");
 };
