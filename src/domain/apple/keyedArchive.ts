@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AnalysisInputError } from "../analysisErrorCore.js";
 import { jsonValueSchema, type JsonValue } from "../jsonValue.js";
 import { localPathStringSchema } from "../localPath.js";
+import { projectPlistValue } from "./plistValue.js";
 
 /**
  * The selected file is intact but is another kind of file, so another tool
@@ -95,12 +96,18 @@ const archiverMismatch = (
     : "its $archiver is not a string";
 };
 
-/** Interpret serialized Foundation references without instantiating archive classes. */
+/** Interpret decoded Foundation values without instantiating archive classes. */
 export const projectKeyedArchive = (
   value: unknown,
   selection: { root?: string | undefined; offset: number; limit: number },
 ) => {
-  const archive = record(jsonValueSchema.parse(value));
+  // Classify generated scalar wrappers by their producer identity, never by
+  // a caller-controlled $plist_type field in an ordinary dictionary.
+  const wrappedScalars = new WeakSet<object>();
+  const projected = projectPlistValue(value, (scalar) =>
+    wrappedScalars.add(scalar),
+  );
+  const archive = record(projected.value);
   if (archive?.$archiver !== "NSKeyedArchiver")
     throw new KeyedArchiveKindError(
       `Selected property list is not an NSKeyedArchiver archive: ${archiverMismatch(archive)}`,
@@ -193,7 +200,10 @@ export const projectKeyedArchive = (
   );
   const objects = table.map((value, id) => {
     scan(id, [{ value, path: [] }]);
-    const fields = record(value);
+    const fields =
+      value !== null && typeof value === "object" && wrappedScalars.has(value)
+        ? undefined
+        : record(value);
     const classUid = uid(fields?.$class);
     const classId =
       classUid !== undefined && Number.isSafeInteger(classUid) && classUid >= 0
@@ -232,6 +242,8 @@ export const projectKeyedArchive = (
   const page = objects.slice(selection.offset, end);
   const ids = new Set(page.map(({ id }) => id));
   return {
+    unknownRealCount: projected.unknownRealCount,
+    unknownDateCount: projected.unknownDateCount,
     roots,
     objects: page,
     references: references.filter(

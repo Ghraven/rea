@@ -27,28 +27,36 @@ export const unknownDateLimitation = (count: number): string =>
  * `$plist_type` objects; a non-finite real becomes an explicit unknown
  * because the XML decoder reports NaN and ±infinity alike.
  */
-export const projectPlistValue = (value: unknown): ProjectedPlistValue => {
+export const projectPlistValue = (
+  value: unknown,
+  /** Observe generated wrappers before consumers classify the JSON value tree. */
+  onWrappedScalar?: (value: Record<string, JsonValue>) => void,
+): ProjectedPlistValue => {
   let unknownRealCount = 0;
   let unknownDateCount = 0;
+  const scalar = (value: Record<string, JsonValue>): JsonValue => {
+    onWrappedScalar?.(value);
+    return value;
+  };
   const project = (item: unknown, depth: number): JsonValue => {
     if (depth > MAX_PLIST_DEPTH)
       throw new RangeError(
         `Plist exceeds ${String(MAX_PLIST_DEPTH)} nesting levels`,
       );
     if (item instanceof Uint8Array)
-      return {
+      return scalar({
         $plist_type: "data",
         base64: Buffer.from(item).toString("base64"),
-      };
+      });
     if (item instanceof Date) {
       if (!Number.isNaN(item.getTime()))
-        return { $plist_type: "date", iso8601: item.toISOString() };
+        return scalar({ $plist_type: "date", iso8601: item.toISOString() });
       unknownDateCount += 1;
-      return { $plist_type: "date", iso8601: null };
+      return scalar({ $plist_type: "date", iso8601: null });
     }
     if (typeof item === "number" && !Number.isFinite(item)) {
       unknownRealCount += 1;
-      return { $plist_type: "real", value: null };
+      return scalar({ $plist_type: "real", value: null });
     }
     if (Array.isArray(item))
       return item.map((entry: unknown) => project(entry, depth + 1));

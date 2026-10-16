@@ -194,7 +194,6 @@ itWithCaptureCapability(
         }),
         controller.signal,
       );
-      expect(result.ok).toBe(true);
       if (!result.ok) throw result.error;
       expect(result.value.exit.reason).toBe("timeout");
     } finally {

@@ -325,25 +325,8 @@ const runScenario = async (
         ],
       }),
     });
-  if (options.signal?.aborted)
-    throw new AnalysisCancelledError(OPERATION, {
-      cause: options.signal?.reason,
-      partialObservation: {
-        kind: "browser-scenario-observation",
-        capture: browserScenarioCaptureData({
-          session,
-          scenario,
-          startedAt,
-          steps,
-          cleanup: cleanupOutcome.cleanup,
-          limitations: [
-            "Scenario capture completed, but the request was cancelled during final browser cleanup.",
-          ],
-        }),
-      },
-    });
   const completeness = globalCompleteness(scenario, session, steps);
-  return browserScenarioCaptureSchema.parse({
+  const capture = browserScenarioCaptureSchema.parse({
     ...browserScenarioCaptureData({
       session,
       scenario,
@@ -353,6 +336,21 @@ const runScenario = async (
     }),
     completeness,
   });
+  if (options.signal?.aborted)
+    throw new AnalysisCancelledError(OPERATION, {
+      cause: options.signal?.reason,
+      partialObservation: {
+        kind: "browser-scenario-observation",
+        capture: {
+          ...capture,
+          limitations: [
+            ...capture.limitations,
+            "The request was cancelled; collected scenario observations and confirmed browser cleanup are retained.",
+          ],
+        },
+      },
+    });
+  return capture;
 };
 
 /** Controlled Playwright/CDP scenario driver with exact process ownership. */

@@ -76,8 +76,34 @@ export const startMcpTransport = async (
   };
   // Optional providers are shared by every server instance the SDK creates,
   // including a discarded discovery probe, so only process shutdown closes them.
-  const closeOptionalProviders = async (): Promise<void> => {
-    await optionalProviders.browserScenarioCapture?.close?.();
+  const pendingOptionalProviders = new Set([
+    optionalProviders.browserObservation,
+    optionalProviders.browserScenarioCapture,
+    optionalProviders.electronObservation,
+  ]);
+  let optionalProviderClose: Promise<void> | undefined;
+  const closeOptionalProviders = (): Promise<void> => {
+    optionalProviderClose ??= Promise.allSettled(
+      [...pendingOptionalProviders].map(async (provider) => {
+        await provider?.close?.();
+        pendingOptionalProviders.delete(provider);
+      }),
+    )
+      .then((results) => {
+        const failures = results.flatMap((result) =>
+          result.status === "rejected" ? [result.reason] : [],
+        );
+        if (failures.length > 0)
+          throw new AggregateError(
+            failures,
+            "Optional provider cleanup failed",
+          );
+      })
+      .catch((cause: unknown) => {
+        optionalProviderClose = undefined;
+        throw cause;
+      });
+    return optionalProviderClose;
   };
   let handle: StdioServerHandle;
   try {
@@ -95,6 +121,7 @@ export const startMcpTransport = async (
             environment: serverContext.environment,
             delivery: serverContext.delivery,
             ...optionalProviders,
+            optionalProviderOwnership: "caller",
             androidAnalysis: android,
           },
         );

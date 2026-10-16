@@ -5,6 +5,7 @@ import { expect, it, vi } from "vitest";
 
 import type { BrowserScenarioCapturePort } from "../../src/application/BrowserScenarioCapturePort.js";
 import { createBrowserScenarioEvidence } from "../../src/application/BrowserScenarioEvidence.js";
+import { captureBrowserScenario } from "../../src/application/BrowserScenarioCaptureService.js";
 import type { BrowserScenarioSessionPort } from "../../src/browser/BrowserScenarioSessionPort.js";
 import { PlaywrightBrowserScenarioProvider } from "../../src/browser/PlaywrightBrowserScenarioProvider.js";
 import { PlaywrightScenarioSession } from "../../src/browser/PlaywrightScenarioSession.js";
@@ -195,7 +196,7 @@ it("retains the completed scenario when cancellation arrives during final close"
   const provider = new PlaywrightBrowserScenarioProvider(async () => session);
   const cancellation = new AbortController();
   try {
-    const pending = provider.captureScenario(scenario, {
+    const pending = captureBrowserScenario(provider, scenario, {
       signal: cancellation.signal,
     });
     await closeStarted;
@@ -206,9 +207,9 @@ it("retains the completed scenario when cancellation arrives during final close"
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toBeInstanceOf(AnalysisCancelledError);
-    expect(result.error.partialObservation).toMatchObject({
-      kind: "browser-scenario-observation",
-      capture: {
+    expect(parseEvidence(result.error.partialObservation)).toMatchObject({
+      operation: "capture_browser_scenario",
+      normalized_result: {
         browser: { cleanup: "terminated-owned-process" },
         steps: [{ step_id: "scenario_start" }, { step_id: "wait" }],
       },

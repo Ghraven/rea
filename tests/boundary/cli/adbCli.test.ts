@@ -1,4 +1,5 @@
 import { chmod, lstat, readFile, unlink } from "node:fs/promises";
+import { basename } from "node:path";
 import { expect, it, onTestFinished } from "vitest";
 import { z } from "zod";
 
@@ -105,12 +106,15 @@ it.skipIf(process.platform === "win32")(
       "adb",
       `#!/bin/sh
 root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-printf '%s\\n' "$*" >> "$root/calls"
+printf '%s\\0' "$@" >> "$root/calls"
+printf '\\0' >> "$root/calls"
 if [ "$1" = version ]; then
   printf 'Android Debug Bridge version 1.0.41\\nVersion 34.0.5-cli\\nInstalled as %s\\n' "$0"
   exit 0
 fi
 if [ "$1" = -s ] && [ "$3" = install ]; then
+  if [ "$4" = -r ]; then input="$5"; else input="$4"; fi
+  cmp "$input" "$root/app.apk" || exit 1
   if [ -f "$root/installed" ]; then
     if [ "$4" != -r ]; then
       printf 'Failure [INSTALL_FAILED_ALREADY_EXISTS]\\n'
@@ -154,8 +158,12 @@ exit 1
     expect(freshReplace).toMatchObject({
       ok: true,
       data: {
-        parameters: { replace: true },
-        normalized_result: { replace_requested: true, replaced: null },
+        parameters: { apk_path: apk, replace: true },
+        normalized_result: {
+          apk_path: apk,
+          replace_requested: true,
+          replaced: null,
+        },
         confidence: "observed",
       },
     });
@@ -167,8 +175,12 @@ exit 1
     expect(existingReplace).toMatchObject({
       ok: true,
       data: {
-        parameters: { replace: true },
-        normalized_result: { replace_requested: true, replaced: null },
+        parameters: { apk_path: apk, replace: true },
+        normalized_result: {
+          apk_path: apk,
+          replace_requested: true,
+          replaced: null,
+        },
       },
     });
 
@@ -177,22 +189,37 @@ exit 1
     expect(freshDefault).toMatchObject({
       ok: true,
       data: {
-        parameters: { replace: false },
-        normalized_result: { replace_requested: false, replaced: null },
+        parameters: { apk_path: apk, replace: false },
+        normalized_result: {
+          apk_path: apk,
+          replace_requested: false,
+          replaced: null,
+        },
       },
     });
     expect(await readFile(workspace.path("events"), "utf8")).toBe(
       "fresh-install\nreplacement\nfresh-install\n",
     );
     const calls = await readFile(workspace.path("calls"), "utf8");
-    expect(calls.split("\n").filter((line) => line !== "")).toEqual([
-      "version",
-      `-s emulator-5554 install -r ${apk}`,
-      "version",
-      `-s emulator-5554 install -r ${apk}`,
-      "version",
-      `-s emulator-5554 install ${apk}`,
+    const commands = calls
+      .split("\0\0")
+      .filter(Boolean)
+      .map((command) => command.split("\0"));
+    expect(commands).toEqual([
+      ["version"],
+      ["-s", "emulator-5554", "install", "-r", expect.any(String)],
+      ["version"],
+      ["-s", "emulator-5554", "install", "-r", expect.any(String)],
+      ["version"],
+      ["-s", "emulator-5554", "install", expect.any(String)],
     ]);
+    for (const command of commands.filter((args) => args[2] === "install")) {
+      const staged = z.string().parse(command.at(-1));
+      expect(staged).not.toBe(apk);
+      expect(basename(staged)).toBe("app.apk");
+      await expect(lstat(staged)).rejects.toMatchObject({ code: "ENOENT" });
+    }
+    expect(await readFile(apk, "utf8")).toBe("apk");
   },
 );
 
