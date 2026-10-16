@@ -816,12 +816,14 @@ class NativeMacOSClient implements AnalysisClient {
       json.value,
       ...(xml === undefined ? [] : [xml.value]),
     ].map((item) => invocation(item, plist.value, "$PLIST"));
+    const format = await plistSourceFormat(
+      classified.value.stdout,
+      plist.value,
+      requested,
+    );
+    if (!format.ok) return format;
     const result = inspectPlistSchema.parse({
-      format: /binary property list/iu.test(classified.value.stdout)
-        ? "binary"
-        : /XML|text/iu.test(classified.value.stdout)
-          ? "xml"
-          : "unknown",
+      format: format.value,
       value: parsed.value.value,
       bundle: parsed.value.bundle,
       source_path: plist.value,
@@ -1121,6 +1123,47 @@ const plutilDiagnostic = (stderr: string, path: string): string => {
  * Admit a readable regular file before plutil runs, so a later plutil failure
  * reflects the bytes rather than a missing path or a host permission denial.
  */
+/** Bytes examined for leading markup when `file` reports only text. */
+const PLIST_MARKUP_PROBE_BYTES = 4_096;
+
+/**
+ * `file` names XML only when a document declaration is present, so XML
+ * without one and OpenStep text both read as plain text. Their first
+ * non-whitespace character separates them; anything else stays unknown.
+ */
+const plistSourceFormat = async (
+  description: string,
+  path: string,
+  requested: string | undefined,
+): Promise<Result<"binary" | "xml" | "unknown", AnalysisError>> => {
+  if (/binary property list/iu.test(description)) return ok("binary");
+  if (/\bXML\b/iu.test(description)) return ok("xml");
+  if (!/\btext\b/iu.test(description)) return ok("unknown");
+  try {
+    const handle = await open(path, "r");
+    try {
+      const head = Buffer.alloc(PLIST_MARKUP_PROBE_BYTES);
+      const { bytesRead } = await handle.read(head, 0, head.length, 0);
+      const text = head
+        .subarray(0, bytesRead)
+        .toString("utf8")
+        .replace(/^﻿/u, "")
+        .trimStart();
+      return ok(text.startsWith("<") ? "xml" : "unknown");
+    } finally {
+      await handle.close();
+    }
+  } catch (cause: unknown) {
+    const code =
+      cause instanceof Error && "code" in cause ? cause.code : undefined;
+    if (code === "ENOENT" || code === "ENOTDIR")
+      return err(unreadablePlist(path, requested, "no file exists there"));
+    return err(
+      new ProviderAdapterError(IDENTITY.id, "inspect_plist", { cause }),
+    );
+  }
+};
+
 const requireRegularPlist = async (
   path: string,
   requested: string | undefined,

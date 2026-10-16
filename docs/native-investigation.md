@@ -261,6 +261,12 @@ Mach-O fixtures check each case against source-owned return values.
 
 ## Static inspection
 
+`inspect_plist.format` describes the selected source, not plutil's conversion
+format. Sources identified as XML or binary retain those labels. A source that
+`file` reports only as text is XML when its first non-whitespace character is
+`<`; any other text, including an OpenStep plist, reports `unknown` even when
+plutil decodes its values through an XML conversion.
+
 `inspect_macho.selected_architecture` identifies the exact selected lipo slice
 and its `container_file_offset` in the input file. A thin Mach-O has a known
 offset of zero; an unknown universal-slice offset stays null. The Evidence
