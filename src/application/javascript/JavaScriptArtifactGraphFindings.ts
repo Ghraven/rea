@@ -332,14 +332,24 @@ const addDiscoveredRole = (
     files: context.filesByPath,
     directoryPaths: context.directoryPaths,
     unanalyzedFiles: context.unanalyzedFiles,
-    ...(input.value.role === "preload" ||
-    (input.value.role === "renderer" &&
-      input.value.resolution_context === "filesystem-expression")
+    ...(input.value.role === "preload"
       ? { runtimePathKind: "exact-file" as const }
       : input.value.role === "renderer" &&
-          input.value.resolution_context === "module-specifier"
-        ? { runtimePathKind: "url-resource" as const }
-        : {}),
+          input.value.resolution_context === "filesystem-expression"
+        ? {
+            // Raw loadFile literals belong to the application, not its caller.
+            runtimePathKind: "application-file" as const,
+            applicationRootPath:
+              context.fileSet.containers.find(
+                ({ sha256, path }) =>
+                  sha256 === input.file.container_sha256 &&
+                  input.file.path.startsWith(`${path}/`),
+              )?.path ?? "",
+          }
+        : input.value.role === "renderer" &&
+            input.value.resolution_context === "module-specifier"
+          ? { runtimePathKind: "url-resource" as const }
+          : {}),
   });
   const role = createElectronRoleNode(context, {
     kind:

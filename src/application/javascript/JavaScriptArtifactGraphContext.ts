@@ -302,13 +302,21 @@ export const artifactFileNodeKind = (
 export const createElectronRoleNode = (
   context: JavaScriptArtifactGraphContext,
   input: RoleNodeInput,
-): ApplicationNode =>
-  context.accumulator.addNode({
+): ApplicationNode => {
+  const target =
+    input.resolution.resolved_path ?? input.resolution.declared_path;
+  // Raw application-relative declarations keep their source occurrence even
+  // when identical source bytes appear under separate application prefixes.
+  const identityPath =
+    input.resolution.runtime_path_base === "application-root"
+      ? compositeKey([input.anchor.path, target])
+      : target;
+  return context.accumulator.addNode({
     kind: input.kind,
     identity: artifactLocalIdentity(
       input.anchor.sha256,
       "electron-role",
-      `${input.kind}:${input.resolution.resolution_context}:${input.resolution.resolved_path ?? input.resolution.declared_path}`,
+      `${input.kind}:${input.resolution.resolution_context}:${identityPath}`,
     ),
     observations: [
       {
@@ -333,6 +341,7 @@ export const createElectronRoleNode = (
       },
     ],
   });
+};
 
 /** Resolve an Electron role to an inventoried asset when available. */
 export const linkElectronRoleToAsset = (
