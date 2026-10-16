@@ -517,6 +517,52 @@ temporary source files are declared as `launchesProcess` and `writesFilesystem`,
 including for a single JavaScript source. This internal analysis does not execute
 the supplied application code.
 
+## Recovering large native analysis results
+
+A completed `analyze_function` dossier supports native views from retained
+Evidence. Select its Evidence ID, then request a pseudocode page:
+
+```json
+{
+  "source": {
+    "kind": "retained-evidence",
+    "evidence_id": "<dossier Evidence ID>"
+  },
+  "view": {
+    "kind": "native",
+    "facet": "pseudocode",
+    "offset": 0,
+    "limit": 4096
+  }
+}
+```
+
+Call `inspect_analysis_view` with that input and follow the returned
+`normalized_result.coverage.next_offset` in the Evidence envelope. Pseudocode
+offsets and limits count UTF-16 code units; assembly and collection facets use
+rows. Singleton facets `procedure`, `native_api`, and `value_flow_summary`
+require offset 0. Paging reads retained evidence and does not
+repeat provider analysis. Keep source coverage and limitations: exhausting text
+does not establish that the analyzed body covers every runtime path.
+
+Standalone `procedure_pseudo_code` strings and `batch_decompile` results are not
+function dossiers and cannot be passed to the native dossier view. Preserve or
+export their complete Evidence instead. `batch_decompile` currently returns full
+per-item pseudocode and does not accept `detail: "summary"`.
+
+A timed-out decompilation is different from a completed result whose delivery
+was too large. After cancellation of an active Ghidra request, successful cleanup
+discards its ephemeral database; the next uncached provider query imports the
+selected target again. Incomplete cleanup retains the owned process/runtime and
+blocks fresh import. Preserve needed Evidence before `close_binary`, check its
+result, and retry close after addressing `cleanup_incomplete` before reopening
+the target. Previously
+retained successful Evidence and matching snapshot entries can still be reused.
+New uncached queries can require another import. Do not repeat completed work to
+recover a smaller reply, or treat a client timeout as an empty successful result.
+The [deadline guide](#ghidra-first-query-deadlines-and-recovery) explains which
+settings belong to the client and how to recover after interrupted startup.
+
 ## Ghidra first-query deadlines and recovery
 
 A successful MCP initialize handshake establishes the REA connection.
