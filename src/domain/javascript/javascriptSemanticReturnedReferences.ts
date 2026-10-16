@@ -13,8 +13,18 @@ import {
 import {
   resolveSemanticBindingState,
   type JavaScriptSemanticAnalysisState,
+  type JavaScriptSemanticBindingState,
   type JavaScriptSemanticInitializer,
 } from "./javascriptSemanticState.js";
+
+/**
+ * How many keys a chain may add to one binding's projection through that
+ * binding's own writes before further self-referencing writes count as
+ * cycles. One pass keeps `x = root; x = x.next; x.run()` resolvable and
+ * bounds a mesh of self-walking writes by their count; two passes cost 10 s
+ * on a React bundle that one pass finishes in 2 s, and three did not finish.
+ */
+const MAX_PROJECTION_GROWTH = 1;
 
 /** A reference potentially handed to a caller or generator consumer. */
 export interface SemanticReturnedReference {
@@ -22,13 +32,26 @@ export interface SemanticReturnedReference {
   readonly projection: JavaScriptSemanticPropertyPath;
 }
 
+/**
+ * What one expansion chain has passed through: each initializer it followed
+ * (value 0) and each binding it read, with the projection length at that
+ * first read. An initializer is followed at most once per chain. A binding
+ * re-read with a longer projection has grown it through a self-referencing
+ * write (x = x.next); from there only writes that leave the chain's bindings
+ * are followed, so the projection grows once per binding per chain.
+ */
+type ChainEntry =
+  | JavaScriptSemanticInitializer
+  | JavaScriptSemanticBindingState;
+type Chain = ReadonlyMap<ChainEntry, number>;
+
 interface Candidate {
   readonly node: t.Node;
   readonly path: readonly (string | number | null)[];
-  readonly initializers: ReadonlySet<JavaScriptSemanticInitializer>;
+  readonly chain: Chain;
 }
 
-type InitializerContext = ReadonlySet<JavaScriptSemanticInitializer>;
+type InitializerContext = Chain;
 type CompletedExpansions = WeakMap<
   t.Node,
   Map<string, readonly InitializerContext[]>
@@ -39,7 +62,7 @@ interface ExpansionFrame {
   readonly node: t.Node;
   readonly pathKey: string;
   readonly parent: ExpansionFrame | null;
-  readonly blockers: Set<JavaScriptSemanticInitializer>;
+  readonly blockers: Map<ChainEntry, number>;
 }
 
 type ExpansionTask =
@@ -54,8 +77,8 @@ const contextContains = (
   context: InitializerContext,
   required: InitializerContext,
 ): boolean => {
-  for (const initializer of required)
-    if (!context.has(initializer)) return false;
+  for (const [entry, depth] of required)
+    if (context.get(entry) !== depth) return false;
   return true;
 };
 
@@ -64,9 +87,9 @@ const propagateBlockers = (
   parent: ExpansionFrame | null,
 ): void => {
   if (parent === null) return;
-  for (const initializer of blockers)
-    if (parent.item.initializers.has(initializer))
-      parent.blockers.add(initializer);
+  for (const [entry, depth] of blockers)
+    if (parent.item.chain.get(entry) === depth)
+      parent.blockers.set(entry, depth);
 };
 
 const completeExpansion = (
@@ -121,7 +144,7 @@ export const createSemanticReturnedReferences = (
     const work: ExpansionTask[] = [
       {
         kind: "visit",
-        item: { node: callee, path: [], initializers: new Set() },
+        item: { node: callee, path: [], chain: new Map() },
         parent: null,
       },
     ];
@@ -142,7 +165,7 @@ export const createSemanticReturnedReferences = (
       const covered = expanded
         .get(node)
         ?.get(pathKey)
-        ?.find((context) => contextContains(item.initializers, context));
+        ?.find((context) => contextContains(item.chain, context));
       if (covered !== undefined) {
         // Cached cycle dependencies must reach the caller's proof too.
         propagateBlockers(covered, parent);
@@ -153,7 +176,7 @@ export const createSemanticReturnedReferences = (
         node,
         pathKey,
         parent,
-        blockers: new Set(),
+        blockers: new Map(),
       };
       work.push({ kind: "complete", frame });
       const pending: Candidate[] = [];
@@ -165,18 +188,40 @@ export const createSemanticReturnedReferences = (
           node,
           state.parentsByNode,
         ).binding;
+        // A write that reads its own binding through a member (x = x.next)
+        // grows the projection on every pass. Each such write is followed
+        // once per chain, but a binding with several of them (t = t.child,
+        // t = t.return, t = t.sibling) is still walked in every order, and
+        // the paths of those orders are all distinct, so the work grows
+        // exponentially with the writes. Grow a binding's projection once per
+        // chain: when the binding is re-read with a longer projection, writes
+        // that read a binding already on the chain are cycle blockers at this
+        // binding, and only writes that leave the chain (x = root) continue.
+        // Re-reads at the same depth keep every write, as alias cycles and
+        // position-narrowed reads need.
+        const entered = item.chain.get(binding);
+        const grown =
+          entered !== undefined &&
+          item.path.length - entered >= MAX_PROJECTION_GROWTH;
         for (const initializer of [
           ...selected.initializers,
           ...selected.referenceInitializers,
         ]) {
-          if (item.initializers.has(initializer)) {
-            frame.blockers.add(initializer);
+          if (item.chain.has(initializer)) {
+            frame.blockers.set(initializer, 0);
             continue;
           }
+          if (grown && readsChainBinding(initializer.node, item.chain, state)) {
+            frame.blockers.set(binding, entered);
+            continue;
+          }
+          const chain = new Map(item.chain);
+          if (entered === undefined) chain.set(binding, item.path.length);
+          chain.set(initializer, 0);
           pending.push({
             node: initializer.node,
             path: [...initializer.projection, ...item.path],
-            initializers: new Set([...item.initializers, initializer]),
+            chain,
           });
         }
       } else if (
@@ -290,6 +335,40 @@ export const createSemanticReturnedReferences = (
     results.set(callee, output);
     return output;
   };
+};
+
+/**
+ * Whether expanding this write would read a binding the chain already holds:
+ * the write's value is that binding, a member chain on it, or a branch of a
+ * conditional, logical or sequence expression that is.
+ */
+const readsChainBinding = (
+  node: t.Node,
+  chain: Chain,
+  state: JavaScriptSemanticAnalysisState,
+): boolean => {
+  let current = unwrapJavaScriptExpression(node).node;
+  while (t.isMemberExpression(current) || t.isOptionalMemberExpression(current))
+    current = unwrapJavaScriptExpression(current.object).node;
+  if (t.isIdentifier(current)) {
+    const binding = resolveSemanticBindingState(state, current, current.name);
+    return binding !== undefined && chain.has(binding);
+  }
+  if (t.isConditionalExpression(current))
+    return (
+      readsChainBinding(current.consequent, chain, state) ||
+      readsChainBinding(current.alternate, chain, state)
+    );
+  if (t.isLogicalExpression(current))
+    return (
+      readsChainBinding(current.left, chain, state) ||
+      readsChainBinding(current.right, chain, state)
+    );
+  if (t.isSequenceExpression(current)) {
+    const last = current.expressions.at(-1);
+    return last !== undefined && readsChainBinding(last, chain, state);
+  }
+  return false;
 };
 
 const selectObjectTargets = (

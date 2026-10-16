@@ -304,6 +304,12 @@ Receiver projections follow known data fields initialized from `this` or earlier
 self-referencing fields; static fields retain their declaring class identity.
 An alias cycle that repeatedly selects deeper children retains escape uncertainty
 at its recovered roots rather than claiming a fixed number of loop iterations.
+Returned-reference search follows each write of a binding once per chain, and
+lets a binding's own member writes (`t = t.child`, `t = t.return`) deepen its
+projection once per chain; a second self-walk through the same binding counts
+as a cycle, so a reference reachable only through two consecutive self-walks
+is not reported. Writes that leave the chain, such as `t = root`, are still
+followed after that first deepening.
 
 Writes through an object getter's returned receiver retain that uncertainty
 when the object is an array element, nested inside mixed object/array

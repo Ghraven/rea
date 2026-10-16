@@ -171,6 +171,72 @@ return a${depth}.make();}`);
   },
 );
 
+it("bounds self-walking writes of one binding by their count", () => {
+  // A React-style local reassigned from its own members in many branches
+  // (t = t.child, t = t.return, ...) used to be expanded in every order of
+  // those writes, each order producing a distinct projection.
+  const measure = (writes: number) => {
+    const context = indexed(`function fallback(){return {};}
+function walk(root, flag){ let t = root; switch (flag) {
+${Array.from({ length: writes }, (_, i) => `case ${i}: t = t.key${i}; break;`).join("\n")}
+} return t.make(); }`);
+    const walk = context.state.program.body.at(-1);
+    if (!t.isFunctionDeclaration(walk)) throw new Error("Missing walk");
+    const last = walk.body.body.at(-1);
+    if (!t.isReturnStatement(last) || !t.isCallExpression(last.argument))
+      throw new Error("Missing call");
+    const lookups = context.state.scopes.map((scope) =>
+      vi.spyOn(scope.bindings, "get"),
+    );
+    try {
+      expect(
+        createSemanticReturnedReferences(context.state)(last.argument.callee),
+      ).toHaveLength(0);
+      return lookups.reduce(
+        (total, lookup) => total + lookup.mock.calls.length,
+        0,
+      );
+    } finally {
+      for (const lookup of lookups) lookup.mockRestore();
+    }
+  };
+  const small = measure(8);
+  const large = measure(12);
+  expect(small).toBeGreaterThan(0);
+  // 8 -> 12 writes grew lookups 328,802 -> millions before the bound.
+  expect(large).toBeLessThan(3 * small);
+});
+
+it("grows a binding's projection once per chain through its own writes", () => {
+  const references = (source: string) => {
+    const context = indexed(source);
+    const run = context.state.program.body.at(-1);
+    if (!t.isFunctionDeclaration(run)) throw new Error("Missing run");
+    const last = run.body.body.at(-1);
+    if (!t.isReturnStatement(last) || !t.isCallExpression(last.argument))
+      throw new Error("Missing call");
+    return createSemanticReturnedReferences(context.state)(
+      last.argument.callee,
+    );
+  };
+  // One self-walk resolves through the literal, as before.
+  expect(
+    references(`function make(){ return {v:1}; } const root = {next:{make}};
+function run(){ let x = root; x = x.next; return x.make(); }`),
+  ).toHaveLength(1);
+  // Alias cycles at the same depth keep every write.
+  expect(
+    references(`function make(){ return {v:1}; } const root = {next:{make}};
+function run(flag){ let x = root, y = x; if (flag) { x = y; y = x; } x = y.next; return x.make(); }`),
+  ).toHaveLength(1);
+  // A second self-walk on the same binding is the bound: the chain leaves
+  // through writes that do not read its own bindings (x = root) and stops.
+  expect(
+    references(`function make(){ return {v:1}; } const root = {next:{next:{make}}};
+function run(){ let x = root; x = x.next; x = x.next; return x.make(); }`),
+  ).toHaveLength(0);
+});
+
 it.each(["||=", "??="])(
   "retains definite assignment to an empty local: %s",
   (operator) => {
