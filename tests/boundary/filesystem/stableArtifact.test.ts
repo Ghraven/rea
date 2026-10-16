@@ -8,7 +8,11 @@ import {
 } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { readStableArtifact } from "../../../src/artifacts/readStableArtifact.js";
+import { createHash } from "node:crypto";
+import {
+  readStableArtifact,
+  readStableArtifactRanges,
+} from "../../../src/artifacts/readStableArtifact.js";
 import { createTestTempDirectory } from "../../fixtures/temporaryDirectory.js";
 
 it("reads exact binary and empty bytes and rejects symlink/size/cancellation boundaries", async () => {
@@ -77,4 +81,51 @@ it("keeps initially missing inputs distinguishable from later changes", async ()
   await expect(
     readStableArtifact(join(root, "missing"), 1024),
   ).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("decodes ranges and hashes the whole file through one admitted descriptor", async () => {
+  const root = await createTestTempDirectory("rea-stable-ranges-");
+  const path = join(root, "source.bin");
+  const bytes = Buffer.from("0123456789abcdef");
+  await writeFile(path, bytes);
+  const {
+    result,
+    sha256,
+    bytes: size,
+  } = await readStableArtifactRanges(path, async (source) =>
+    Buffer.concat([await source.read(14, 2), await source.read(0, 3)]),
+  );
+  expect(result.toString()).toBe("ef012");
+  expect(size).toBe(16);
+  expect(sha256).toBe(createHash("sha256").update(bytes).digest("hex"));
+  await expect(
+    readStableArtifactRanges(path, (source) => source.read(10, 7)),
+  ).rejects.toBeInstanceOf(RangeError);
+  const link = join(root, "link.bin");
+  await symlink(path, link);
+  await expect(
+    readStableArtifactRanges(link, (source) => source.read(0, 1)),
+  ).rejects.toMatchObject({ reason: "path" });
+});
+
+it("rejects a file changed after its ranges were decoded", async () => {
+  const root = await createTestTempDirectory("rea-stable-ranges-change-");
+  const path = join(root, "selected");
+  await writeFile(path, "original evidence");
+  let inspected = 0;
+  const reading = readStableArtifactRanges(
+    path,
+    (source) => source.read(0, 4),
+    undefined,
+    undefined,
+    {
+      async lstat(selected) {
+        inspected++;
+        if (inspected === 2) await unlink(selected);
+        return lstat(selected, { bigint: true });
+      },
+      open,
+    },
+  );
+  await expect(reading).rejects.toMatchObject({ reason: "integrity" });
 });
