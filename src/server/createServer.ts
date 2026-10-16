@@ -176,6 +176,8 @@ export interface CreateServerOptions {
   readonly browserObservation?: BrowserObservationPort;
   readonly browserScenarioCapture?: BrowserScenarioCapturePort;
   readonly electronObservation?: ElectronObservationPort;
+  /** Shared observation providers stay with their caller through SDK probes. */
+  readonly observationProviderOwnership?: "server" | "caller";
   readonly electronActiveObservation?: ElectronActiveObservationPort;
   readonly javascriptRuntimeObservation?: JavaScriptRuntimeObservationPort;
   readonly fridaInstrumentation?: FridaInstrumentationPort;
@@ -388,9 +390,13 @@ export const createServer = (
       peResources.close(),
       webNetworkCapture.close(),
       javascriptRecovery.close?.() ?? Promise.resolve(),
-      options.browserObservation?.close?.() ?? Promise.resolve(),
-      options.browserScenarioCapture?.close?.() ?? Promise.resolve(),
-      options.electronObservation?.close?.() ?? Promise.resolve(),
+      ...(options.observationProviderOwnership === "caller"
+        ? []
+        : [
+            options.browserObservation?.close?.() ?? Promise.resolve(),
+            options.browserScenarioCapture?.close?.() ?? Promise.resolve(),
+            options.electronObservation?.close?.() ?? Promise.resolve(),
+          ]),
       webRuntime.provider.close?.() ?? Promise.resolve(),
       artifactResources.close(),
       reverseEngineering.close(),

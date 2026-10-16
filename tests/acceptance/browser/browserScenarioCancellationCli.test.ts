@@ -1,8 +1,7 @@
 import { resolve } from "node:path";
 import { expect } from "vitest";
 
-import { browserScenarioCaptureSchema } from "../../../src/domain/browserScenarioCapture.js";
-import { parseEvidence } from "../../../src/domain/evidence.js";
+import { analysisCliErrorEnvelopeSchema } from "../../../src/contracts/errorSchemas.js";
 import { processTest } from "../../support/process/processFixture.js";
 
 // Actual CLI subprocess and OS signals with a controlled browser session.
@@ -66,17 +65,36 @@ processTest
       expect(stderr).toContain("REA_CONTROLLED_CLOSE_CALLBACK");
       expect(stderr).toContain("REA_CONTROLLED_PROFILE_CALLBACK");
       const document: unknown = JSON.parse(stdout);
-      const evidence = parseEvidence(document);
-      expect(evidence).toEqual(document);
-      const capture = browserScenarioCaptureSchema.parse(
-        evidence.normalized_result,
-      );
-      expect(capture.browser.cleanup).toBe("terminated-owned-process");
-      expect(capture.steps.map(({ status }) => status)).toEqual([
-        "completed",
-        "cancelled",
-      ]);
-      expect(capture.completeness.status).toBe("incomplete");
+      expect(analysisCliErrorEnvelopeSchema.parse(document)).toMatchObject({
+        code: "cancelled",
+        category: "cancelled",
+        details: {
+          partial_observation: {
+            kind: "browser-scenario-observation",
+            capture: {
+              browser: {
+                process_ownership: "provider-owned",
+                cleanup: "terminated-owned-process",
+              },
+              steps: [
+                {
+                  step_id: "scenario_start",
+                  status: "completed",
+                  artifacts: { url: { state: "captured" } },
+                },
+                {
+                  step_id: "wait",
+                  status: "cancelled",
+                  completeness: {
+                    status: "incomplete",
+                    equality_eligible: false,
+                  },
+                },
+              ],
+            },
+          },
+        },
+      });
     } finally {
       clearTimeout(deadline);
     }
