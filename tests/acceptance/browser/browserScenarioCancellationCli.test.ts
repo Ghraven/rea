@@ -3,6 +3,7 @@ import { expect } from "vitest";
 
 import { browserScenarioCaptureSchema } from "../../../src/domain/browserScenarioCapture.js";
 import { parseEvidence } from "../../../src/domain/evidence.js";
+import { jsonObjectSchema } from "../../../src/domain/jsonValue.js";
 import { processTest } from "../../support/process/processFixture.js";
 
 // Actual CLI subprocess and OS signals with a controlled browser session.
@@ -65,9 +66,17 @@ processTest
       expect(stderr).toContain("signal_present=1");
       expect(stderr).toContain("REA_CONTROLLED_CLOSE_CALLBACK");
       expect(stderr).toContain("REA_CONTROLLED_PROFILE_CALLBACK");
-      const document: unknown = JSON.parse(stdout);
-      const evidence = parseEvidence(document);
-      expect(evidence).toEqual(document);
+      const document = jsonObjectSchema.parse(JSON.parse(stdout));
+      expect(document).toMatchObject({
+        code: "cancelled",
+        category: "cancelled",
+        retryable: false,
+        details: { operation: "capture_browser_scenario" },
+      });
+      const details = jsonObjectSchema.parse(document.details);
+      const evidence = parseEvidence(details.partial_observation);
+      expect(evidence).toEqual(details.partial_observation);
+      expect(evidence.operation).toBe("capture_browser_scenario");
       const capture = browserScenarioCaptureSchema.parse(
         evidence.normalized_result,
       );

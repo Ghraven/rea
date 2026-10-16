@@ -21,7 +21,6 @@ import {
   type BrowserStepArtifacts,
 } from "../domain/browserScenarioCaptureValues.js";
 import { AnalysisError } from "../domain/analysisErrorBase.js";
-import { AnalysisCancelledError } from "../domain/analysisErrorCore.js";
 import { BrowserObservationError } from "../domain/browserObservationError.js";
 import { ProviderAdapterError } from "../domain/providerAdapterError.js";
 import { err, ok, type Result } from "../domain/result.js";
@@ -324,23 +323,6 @@ const runScenario = async (
           "Scenario capture ended after an operation failed; uncollected steps are not represented.",
         ],
       }),
-    });
-  if (options.signal?.aborted)
-    throw new AnalysisCancelledError(OPERATION, {
-      cause: options.signal?.reason,
-      partialObservation: {
-        kind: "browser-scenario-observation",
-        capture: browserScenarioCaptureData({
-          session,
-          scenario,
-          startedAt,
-          steps,
-          cleanup: cleanupOutcome.cleanup,
-          limitations: [
-            "Scenario capture completed, but the request was cancelled during final browser cleanup.",
-          ],
-        }),
-      },
     });
   const completeness = globalCompleteness(scenario, session, steps);
   return browserScenarioCaptureSchema.parse({

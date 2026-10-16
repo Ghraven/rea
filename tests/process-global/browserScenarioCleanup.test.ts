@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { expect, it, vi } from "vitest";
 
 import type { BrowserScenarioCapturePort } from "../../src/application/BrowserScenarioCapturePort.js";
+import { captureBrowserScenario } from "../../src/application/BrowserScenarioCaptureService.js";
 import { createBrowserScenarioEvidence } from "../../src/application/BrowserScenarioEvidence.js";
 import type { BrowserScenarioSessionPort } from "../../src/browser/BrowserScenarioSessionPort.js";
 import { PlaywrightBrowserScenarioProvider } from "../../src/browser/PlaywrightBrowserScenarioProvider.js";
@@ -16,6 +17,7 @@ import {
   type BrowserScenario,
 } from "../../src/domain/browserScenario.js";
 import type { BrowserScenarioAction } from "../../src/domain/browserScenarioValues.js";
+import { browserScenarioCaptureSchema } from "../../src/domain/browserScenarioCapture.js";
 import { browserStepArtifactsSchema } from "../../src/domain/browserScenarioCaptureValues.js";
 import { silentLogger } from "../../src/logger.js";
 import {
@@ -195,7 +197,7 @@ it("retains the completed scenario when cancellation arrives during final close"
   const provider = new PlaywrightBrowserScenarioProvider(async () => session);
   const cancellation = new AbortController();
   try {
-    const pending = provider.captureScenario(scenario, {
+    const pending = captureBrowserScenario(provider, scenario, {
       signal: cancellation.signal,
     });
     await closeStarted;
@@ -206,11 +208,22 @@ it("retains the completed scenario when cancellation arrives during final close"
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toBeInstanceOf(AnalysisCancelledError);
-    expect(result.error.partialObservation).toMatchObject({
-      kind: "browser-scenario-observation",
-      capture: {
-        browser: { cleanup: "terminated-owned-process" },
-        steps: [{ step_id: "scenario_start" }, { step_id: "wait" }],
+    const evidence = parseEvidence(result.error.partialObservation);
+    expect(evidence.operation).toBe("capture_browser_scenario");
+    const capture = browserScenarioCaptureSchema.parse(
+      evidence.normalized_result,
+    );
+    expect(capture).toMatchObject({
+      browser: { cleanup: "terminated-owned-process" },
+      steps: [
+        { step_id: "scenario_start", status: "completed" },
+        { step_id: "wait", status: "completed" },
+      ],
+      completeness: {
+        status: "complete",
+        equality_eligible: true,
+        missing_sections: [],
+        truncated_sections: [],
       },
     });
     expect(session.closeBrowserCalls).toBe(1);
