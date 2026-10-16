@@ -489,6 +489,7 @@ describe("setup workflow lifecycle and provider planning", () => {
     expect(result.appliedActions).toEqual(["installed_hopper"]);
     expect(host.hopperInstalls).toBe(1);
     expect(host.hopperReplaceRequests).toEqual([true]);
+    expect(result.clients.codex).toEqual({ status: "unchanged" });
     expect(host.configurations).toBe(0);
     expect(host.checkedHopperPaths).toEqual(["/manual/Hopper"]);
   });
