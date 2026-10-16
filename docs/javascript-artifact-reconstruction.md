@@ -363,6 +363,24 @@ conditions retain both return branches, including fallthrough. Short-circuit
 selection distinguishes truthiness from nullishness; uncertain `??` paths
 retain a nullish guard rather than a falsy guard.
 
+Recognized module factories retain a separate initialization boundary for each
+reachable return and for fallthrough. A conditional early return does not hide
+later exports on the continuing path; exports and captured initializers after a
+definite exit remain unavailable. Fallthrough candidates retain their branch
+predicates. Completed factory control flow is reused within that analysis only.
+Guarded main-process registrations remain candidate paths even with empty
+callbacks; they do not become unconditional IPC summary facts.
+Factory guards read export writes at their source position. Destructured and
+spread snapshots retain their capture position rather than reading later writes.
+An unproven namespace read boundary remains unknown.
+Completed factory environments preserve their `exports` and `module.exports`
+alias identity when a namespace escapes through an export or returned closure.
+Synchronous helper calls retain the caller's factory activation and read point;
+lexical captures and executing callers remain separate facts.
+Async calls retain their truthy Promise identity until an explicit `await`;
+generator calls produce iterators without evaluating their bodies. Awaited
+function values retain their source origins and captured initialization bounds.
+
 These paths appear as contextual `javascript-expression` nodes. An exact `api`
 seed such as `desktop.copy` can trace an exposed member through a unique IPC
 pairing to an external API call. `addListener` is normalized to `on`. Semantic

@@ -286,6 +286,7 @@ export const collectElectronWrappedCallPaths = (
     args: readonly SymbolicValue[],
     context: PathContext,
     invocationNode: t.Node,
+    caller?: SymbolicEnvironment,
   ): void => {
     if (context.active.has(fn.node)) return;
     if (fn.conditionUnresolved === true) {
@@ -297,7 +298,7 @@ export const collectElectronWrappedCallPaths = (
       fn.node.id
         ? fn.node.id.name
         : "closure";
-    walk(fn.node.body, resolver.bind(fn, args, invocationNode), {
+    walk(fn.node.body, resolver.bind(fn, args, invocationNode, caller), {
       ...context,
       steps: [
         ...context.steps,
@@ -406,7 +407,23 @@ export const collectElectronWrappedCallPaths = (
       indexIpcFinding(ipcAtEndpoint(), value);
       if (descriptor.mode !== "send" && descriptor.mode !== "invoke" && !fn)
         accumulator.unknownFindings += 1;
-    } else if (findingGuarded) accumulator.unknownFindings += 1;
+    } else if (findingGuarded) {
+      accumulator.unknownFindings += 1;
+      // A guarded registration is a path candidate even when its callback has
+      // no observable body. Keep its predicate instead of promoting it to an
+      // unconditional IPC fact or dropping the registration entirely.
+      if (descriptor.side === "main")
+        emit(
+          {
+            ...channelContext,
+            entryKind: channelContext.entryKind ?? "ipc-handler",
+            entry: channelContext.entry || channel,
+          },
+          node,
+          endpoint,
+          channel,
+        );
+    }
     if (descriptor.mode === "send" || descriptor.mode === "invoke") {
       emit(channelContext, node, endpoint, channel);
       return;
@@ -555,6 +572,7 @@ export const collectElectronWrappedCallPaths = (
             ],
           },
           node,
+          env,
         );
       } else if (callee.kind === "external") {
         const path = callee.path;
