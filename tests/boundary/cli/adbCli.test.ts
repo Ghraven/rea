@@ -1,4 +1,6 @@
 import { chmod, lstat, readFile, unlink } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { basename, dirname } from "node:path";
 import { expect, it, onTestFinished } from "vitest";
 import { z } from "zod";
 
@@ -100,7 +102,7 @@ it.skipIf(process.platform === "win32")(
   async () => {
     const workspace = await createTestWorkspace("rea-adb-install-state-");
     onTestFinished(() => removeTestWorkspace(workspace.root));
-    const apk = await workspace.write("app.apk", "apk");
+    const apk = await workspace.write("app with spaces.apk", "apk");
     const adb = await workspace.write(
       "adb",
       `#!/bin/sh
@@ -111,6 +113,10 @@ if [ "$1" = version ]; then
   exit 0
 fi
 if [ "$1" = -s ] && [ "$3" = install ]; then
+  input=$4
+  if [ "$4" = -r ]; then input=$5; fi
+  cat "$input" >> "$root/consumed" || exit 1
+  printf '%s\\n' "$input" >> "$root/inputs"
   if [ -f "$root/installed" ]; then
     if [ "$4" != -r ]; then
       printf 'Failure [INSTALL_FAILED_ALREADY_EXISTS]\\n'
@@ -184,14 +190,36 @@ exit 1
     expect(await readFile(workspace.path("events"), "utf8")).toBe(
       "fresh-install\nreplacement\nfresh-install\n",
     );
+    const inputs = (await readFile(workspace.path("inputs"), "utf8"))
+      .split("\n")
+      .filter((line) => line !== "");
+    expect(inputs).toHaveLength(3);
+    expect(new Set(inputs).size).toBe(3);
+    for (const input of inputs) {
+      expect(input).not.toBe(apk);
+      expect(basename(input)).toBe(basename(apk));
+      await expect(lstat(dirname(input))).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+    }
+    expect(await readFile(workspace.path("consumed"), "utf8")).toBe(
+      "apkapkapk",
+    );
+    expect(await readFile(apk, "utf8")).toBe("apk");
+    for (const receipt of [freshReplace, existingReplace, freshDefault])
+      expect(receipt.data.normalized_result).toMatchObject({
+        apk_path: apk,
+        bytes: 3,
+        sha256: createHash("sha256").update("apk").digest("hex"),
+      });
     const calls = await readFile(workspace.path("calls"), "utf8");
     expect(calls.split("\n").filter((line) => line !== "")).toEqual([
       "version",
-      `-s emulator-5554 install -r ${apk}`,
+      `-s emulator-5554 install -r ${inputs[0]}`,
       "version",
-      `-s emulator-5554 install -r ${apk}`,
+      `-s emulator-5554 install -r ${inputs[1]}`,
       "version",
-      `-s emulator-5554 install ${apk}`,
+      `-s emulator-5554 install ${inputs[2]}`,
     ]);
   },
 );
