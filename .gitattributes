@@ -6,3 +6,6 @@
 
 # Preserve whitespace in original upstream licensing texts.
 licenses/npm-runtime-notices.txt whitespace=-blank-at-eol
+
+# Process Monitor CSV fixtures keep the CRLF rows Process Monitor writes.
+tests/fixtures/procmon/*.csv -text

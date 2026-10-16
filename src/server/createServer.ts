@@ -28,6 +28,9 @@ import { registerGoTools } from "./registerGoTools.js";
 import { createRustBinaryService } from "../composition/rust.js";
 import type { RustBinaryService } from "../application/rust/RustBinaryService.js";
 import { registerRustTools } from "./registerRustTools.js";
+import { createProcmonExportService } from "../composition/procmon.js";
+import type { ProcmonExportService } from "../application/procmon/ProcmonExportService.js";
+import { registerProcmonTools } from "./registerProcmonTools.js";
 import type { RecordedCrashService } from "../application/binaryDiagnostics/RecordedCrashService.js";
 import { registerAnalysisViewTool } from "./registerAnalysisViewTool.js";
 import { registerBinaryDiagnosticsTools } from "./registerBinaryDiagnosticsTools.js";
@@ -159,6 +162,7 @@ export interface CreateServerOptions {
   readonly binaryLayout?: BinaryLayoutService;
   readonly goBinary?: GoBinaryService;
   readonly rustBinary?: RustBinaryService;
+  readonly procmonExport?: ProcmonExportService;
   readonly electronFuses?: ElectronFuseService;
   readonly recordedCrash?: RecordedCrashService;
   readonly firmwareAnalysis?: FirmwareAnalysisPort;
@@ -693,6 +697,13 @@ const registerConfiguredAnalysisTools = (
   registerRustTools(
     server,
     options.rustBinary ?? createRustBinaryService(),
+    toolLogger,
+    recordEvidence,
+    withAdmittedAnalysis,
+  );
+  registerProcmonTools(
+    server,
+    options.procmonExport ?? createProcmonExportService(),
     toolLogger,
     recordEvidence,
     withAdmittedAnalysis,

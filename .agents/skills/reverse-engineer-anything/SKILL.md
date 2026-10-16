@@ -177,6 +177,12 @@ explicit path or endpoint and do not need it.
   A rustc commit hash is an inference from a read-only `/rustc/<40-hex>/` path.
   See the
   [Rust binary guide](https://github.com/morluto/rea/blob/main/docs/rust-binaries.md).
+- Saved Process Monitor XML or CSV export: `inspect_procmon_export` with the
+  explicit local file. Page with `event_offset`/`event_limit` instead of
+  requesting every event. Missing columns are null, not empty; partial coverage
+  means events after the stopping line were not examined. No live tracing or
+  PML decoding. See the
+  [Process Monitor export guide](https://github.com/morluto/rea/blob/main/docs/procmon-exports.md).
 
 - Explicit local SQLite database snapshot: `inspect_sqlite_database`. Inspect
   with Node.js 24.x >=24.15 or 26+ providing native SQLite limits. Read schema

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<procmon>
+<processlist>
+<process><ProcessIndex>1</ProcessIndex><ProcessId>4120</ProcessId><ProcessName>sample.exe</ProcessName></process>
+</processlist>
+<eventlist>
+<event><ProcessIndex>1</ProcessIndex><Time_of_Day>9:41:07.1234567 AM</Time_of_Day><Process_Name>sample.exe</Process_Name><PID>4120</PID><Operation>RegOpenKey</Operation><Path>HKLM\Software\Sample</Path><Result>SUCCESS</Result><Detail>Desired Access: Read</Detail></event>
+<event><ProcessIndex>1</ProcessIndex><Time_of_Day>9:41:07.1240000 AM</Time_of_Day><Process_Name>sample.exe</Process_Name><PID>4120</PID><Operation>CreateFile</Operation><Path>C:\Users\analyst\AppData\Local\Sample\settings.ini</Path><Result>NAME NOT FOUND</Result><Detail>Desired Access: Generic Read, Disposition: Open</Detail><stack><frame><depth>0</depth><address>0xfffff80312345678</address></frame></stack></event>
+<event><ProcessIndex>1</ProcessIndex><Time_of_Day>9:41:07.1311111 AM</Time_of_Day><Process_Name>sample.exe</Process_Name><PID>4120</PID><Operation>WriteFile</Operation><Path>C:\Temp\note &amp; "draft".txt</Path><Result>SUCCESS</Result></event>
+</eventlist>
+</procmon>

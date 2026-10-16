@@ -95,6 +95,16 @@ dependency edges, and the section's file range. A missing `.dep-v0` section is
 null metadata, not proof that the binary has no dependencies. See
 [Rust binaries](rust-binaries.md).
 
+Read events from a saved Process Monitor XML or CSV export, 50 at a time:
+
+```bash
+rea inspect-procmon-export /absolute/path/to/procmon.csv --json
+```
+
+Use `--event_offset` and `--event_limit` to page, or `--all_events` for the
+rest. Truncated or malformed exports keep the events read before the problem
+with partial coverage. See [Process Monitor exports](procmon-exports.md).
+
 Configure [Hopper or Ghidra](installation.md#hopper), the
 [IDA adapter](ida-provider.md), or [Kuna](kuna-provider.md) before analyzing a
 native target. Substitute

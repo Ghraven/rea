@@ -1,0 +1,4 @@
+﻿"Time of Day","Process Name","PID","Operation","Path","Result","Detail"
+"9:41:07.1234567 AM","sample.exe","4120","RegOpenKey","HKLM\Software\Sample","SUCCESS","Desired Access: Read"
+"9:41:07.1240000 AM","sample.exe","4120","CreateFile","C:\Users\analyst\AppData\Local\Sample\settings.ini","NAME NOT FOUND","Desired Access: Generic Read, Disposition: Open, Options: Synchronous IO Non-Alert"
+"9:41:07.1311111 AM","sample.exe","4120","WriteFile","C:\Temp\note ""draft"".txt","SUCCESS",""

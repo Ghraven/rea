@@ -162,6 +162,7 @@ REA 需要 Node.js 22.x（>=22.19）、24.x（>=24.11）或 26+，以及 npm。�
 | Flutter 应用          | Dart 快照哈希、按 ABI 的库摘要及引擎构建溯源                  | 无（静态 APK 解析）；[Flutter 指南](../flutter-analysis.md)                                                        |
 | 固件                  | 区域、提取结果和转交原生分析的内容                            | Linux 上的 Binwalk / Unblob；[固件指南](../firmware-analysis.md)                                                   |
 | 抓包文件              | 指定字段、重复值、过滤条件与解码规则                          | Linux: TShark 4.x + prlimit; [抓包分析指南](../packet-captures.md)                                                 |
+| Process Monitor 日志  | 已保存 XML 或 CSV 导出中的文件、注册表、进程与网络事件        | 无（静态导出解析）；[Procmon 指南](../procmon-exports.md)                                                          |
 | 录制的逻辑信号        | 解码注释、样本范围和诊断信息                                  | Linux: sigrok-cli 0.7.2 + prlimit; [信号记录指南](../signal-recordings.md)                                         |
 | 软件包与资源          | 文件清单、摘要、plist、Apple bundle 结构和提取的资源          | [制品与 JavaScript 指南](../javascript-artifact-reconstruction.md)、[Apple 应用](../apple-application-analysis.md) |
 | 进程行为              | 终端输出、交互、退出和文件系统观察结果，以及运行对比          | 支持原生 PTY 的 Linux/macOS；[进程捕获](../process-capture.md)                                                     |

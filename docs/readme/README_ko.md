@@ -165,6 +165,7 @@ REA에는 Node.js 22.x(>=22.19), 24.x(>=24.11) 또는 26+와 npm이 필요합니
 | 펌웨어                | 영역, 추출 결과, 네이티브 분석으로 전달할 정보                                | Linux의 Binwalk / Unblob; [펌웨어 가이드](../firmware-analysis.md)                                                                |
 | 기록된 패킷           | 선택 필드, 반복 값, 필터 및 디코딩 규칙                                       | Linux: TShark 4.x + prlimit; [캡처 가이드](../packet-captures.md)                                                                 |
 | 패킷 요약             | 엔드포인트, DNS, TLS SNI, 프로토콜 분포, HTTP 요청                            | 호출자 제공 tshark 및 capinfos(Linux에서 검증됨); [pcap 가이드](../pcap-analysis.md)                                              |
+| Process Monitor 로그  | 저장된 XML 또는 CSV 내보내기의 파일, 레지스트리, 프로세스, 네트워크 이벤트    | 없음 (정적 내보내기 파싱); [Procmon 가이드](../procmon-exports.md)                                                                |
 | 기록된 논리 신호      | 디코더 주석, 샘플 범위, 진단 정보                                             | Linux: sigrok-cli 0.7.2 + prlimit; [신호 기록 가이드](../signal-recordings.md)                                                    |
 | 패키지 및 리소스      | 파일 목록, 다이제스트, plist, Apple 번들 구조, 추출한 리소스                  | [아티팩트 및 JavaScript 가이드](../javascript-artifact-reconstruction.md), [Apple 애플리케이션](../apple-application-analysis.md) |
 | 프로세스 동작         | 터미널 출력, 상호작용, 종료 및 파일 시스템 관찰 결과, 실행 비교               | 네이티브 PTY를 지원하는 Linux/macOS; [프로세스 캡처](../process-capture.md)                                                       |

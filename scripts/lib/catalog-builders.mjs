@@ -37,6 +37,7 @@ export const toolFamilyCatalog = (sources) => {
         ...sources.wasmContracts.WASM_TOOL_CONTRACTS,
         ...sources.sqliteContracts.SQLITE_TOOL_CONTRACTS,
         ...sources.captureContracts.CAPTURE_TOOL_CONTRACTS,
+        ...sources.procmonContracts.PROCMON_TOOL_CONTRACTS,
         ...sources.signalContracts.SIGNAL_TOOL_CONTRACTS,
       ],
     },
@@ -268,6 +269,10 @@ export const providerCatalog = (sources) => {
     {
       identity: sources.rustProvider.RUST_BINARY_PROVIDER_IDENTITY,
       contracts: sources.rustContracts.RUST_TOOL_CONTRACTS,
+    },
+    {
+      identity: sources.procmonProvider.PROCMON_EXPORT_PROVIDER_IDENTITY,
+      contracts: sources.procmonContracts.PROCMON_TOOL_CONTRACTS,
     },
     {
       identity: sources.electronFuseProvider.ELECTRON_FUSE_PROVIDER_IDENTITY,
